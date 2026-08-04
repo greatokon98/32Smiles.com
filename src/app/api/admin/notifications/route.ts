@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
       "CONTACT_RECEIVED",
       "CONTACT_ASSIGNED",
       "MESSAGE_RECEIVED",
+      "MESSAGE_EDITED",
       "AI_CONTENT_READY",
       "AI_CONTENT_APPROVED",
       "AI_CONTENT_REJECTED",

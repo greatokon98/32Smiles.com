@@ -28,7 +28,7 @@ export async function PATCH(
 
     const existing = await prismaDirect.message.findFirst({
       where: { id, senderId: me, deletedAt: null },
-      select: { id: true },
+      select: { id: true, conversationId: true },
     })
     if (!existing) {
       return NextResponse.json({ error: "Message not found" }, { status: 404 })
@@ -39,6 +39,39 @@ export async function PATCH(
       data: { body: message.trim(), editedAt: new Date() },
       select: messageSelect,
     })
+
+    try {
+      const conversation = await prismaDirect.conversation.findFirst({
+        where: {
+          id: existing.conversationId,
+          OR: [{ userAId: me }, { userBId: me }],
+        },
+        select: { userAId: true, userBId: true },
+      })
+      if (conversation) {
+        const otherId = conversation.userAId === me ? conversation.userBId : conversation.userAId
+        const meRow = await prismaDirect.user.findUnique({
+          where: { id: me },
+          select: { name: true },
+        })
+        await prismaDirect.notification.create({
+          data: {
+            userId: otherId,
+            type: "MESSAGE_EDITED",
+            channel: "IN_APP",
+            title: `${meRow?.name || "Staff"} edited a message`,
+            message: updated.body.slice(0, 200),
+            data: {
+              conversationId: existing.conversationId,
+              messageId: id,
+              senderId: me,
+            },
+          },
+        })
+      }
+    } catch (notifyError) {
+      console.error("[API] Message edit notification error:", notifyError)
+    }
 
     return NextResponse.json({ message: serializeMessage(updated) })
   } catch (error) {

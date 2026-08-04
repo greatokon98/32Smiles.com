@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     await prismaDirect.notification.updateMany({
       where: {
         userId: me,
-        type: "MESSAGE_RECEIVED",
+        type: { in: ["MESSAGE_RECEIVED", "MESSAGE_EDITED"] },
         isRead: false,
         data: { path: ["conversationId"], equals: conversationId },
       },
