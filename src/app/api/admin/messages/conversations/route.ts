@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import prismaDirect from "@/lib/prisma-direct"
 import { auth } from "@/lib/auth"
 import { canonicalPair, getOtherParticipant } from "@/lib/messages"
 
@@ -11,20 +11,44 @@ export async function GET() {
 
   try {
     const me = session.user.id
-    const conversations = await prisma.conversation.findMany({
+
+    // Fetching the list is what marks incoming messages as delivered (1-tick -> 2-tick).
+    await prismaDirect.message.updateMany({
+      where: {
+        conversation: { OR: [{ userAId: me }, { userBId: me }] },
+        senderId: { not: me },
+        deliveredAt: null,
+      },
+      data: { deliveredAt: new Date() },
+    })
+
+    const conversations = await prismaDirect.conversation.findMany({
       where: { OR: [{ userAId: me }, { userBId: me }] },
       orderBy: { lastMessageAt: "desc" },
       include: {
         userA: { select: { id: true, name: true, email: true, role: true } },
         userB: { select: { id: true, name: true, email: true, role: true } },
-        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            senderId: true,
+            body: true,
+            createdAt: true,
+            isRead: true,
+            deliveredAt: true,
+            editedAt: true,
+            deletedAt: true,
+          },
+        },
       },
     })
 
     const conversationIds = conversations.map((c) => c.id)
     const unreadGroups =
       conversationIds.length > 0
-        ? await prisma.message.groupBy({
+        ? await prismaDirect.message.groupBy({
             by: ["conversationId"],
             where: {
               conversationId: { in: conversationIds },
@@ -55,6 +79,9 @@ export async function GET() {
               senderId: last.senderId,
               createdAt: last.createdAt.toISOString(),
               isRead: last.isRead,
+              deliveredAt: last.deliveredAt ? last.deliveredAt.toISOString() : null,
+              editedAt: last.editedAt ? last.editedAt.toISOString() : null,
+              deletedAt: last.deletedAt ? last.deletedAt.toISOString() : null,
             }
           : null,
         unreadCount: unreadMap.get(c.id) || 0,
@@ -83,7 +110,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid participant" }, { status: 400 })
     }
 
-    const participant = await prisma.user.findFirst({
+    const participant = await prismaDirect.user.findFirst({
       where: {
         id: participantId,
         role: { not: "VIEWER" },
@@ -99,7 +126,7 @@ export async function POST(request: NextRequest) {
 
     const [userAId, userBId] = canonicalPair(me, participantId)
 
-    let conversation = await prisma.conversation.findUnique({
+    let conversation = await prismaDirect.conversation.findUnique({
       where: { userAId_userBId: { userAId, userBId } },
       include: {
         userA: { select: { id: true, name: true, email: true, role: true } },
@@ -108,7 +135,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!conversation) {
-      conversation = await prisma.conversation.create({
+      conversation = await prismaDirect.conversation.create({
         data: {
           userAId,
           userBId,

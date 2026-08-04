@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   },
   description: siteConfig.description,
   metadataBase: new URL(siteConfig.url),
+  icons: {
+    icon: "/icon.png",
+    apple: "/apple-icon.png",
+    shortcut: "/favicon.ico",
+  },
   openGraph: {
     type: "website",
     locale: "en_US",

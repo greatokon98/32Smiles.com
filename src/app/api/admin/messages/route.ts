@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import prismaDirect from "@/lib/prisma-direct"
 import { auth } from "@/lib/auth"
-import { canonicalPair, getOtherParticipant } from "@/lib/messages"
+import {
+  canonicalPair,
+  getOtherParticipant,
+  messageSelect,
+  serializeMessage,
+} from "@/lib/messages"
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -18,7 +23,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "conversationId is required" }, { status: 400 })
     }
 
-    const conversation = await prisma.conversation.findFirst({
+    const conversation = await prismaDirect.conversation.findFirst({
       where: { id: conversationId, OR: [{ userAId: me }, { userBId: me }] },
       include: {
         userA: { select: { id: true, name: true, email: true, role: true } },
@@ -30,25 +35,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
     }
 
-    const messages = await prisma.message.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        senderId: true,
-        body: true,
-        isRead: true,
-        createdAt: true,
-      },
-    })
-
     const now = new Date()
-    await prisma.message.updateMany({
+    await prismaDirect.message.updateMany({
       where: { conversationId, senderId: { not: me }, isRead: false },
       data: { isRead: true, readAt: now },
     })
+    await prismaDirect.message.updateMany({
+      where: { conversationId, senderId: { not: me }, deliveredAt: null },
+      data: { deliveredAt: now },
+    })
 
-    await prisma.notification.updateMany({
+    await prismaDirect.notification.updateMany({
       where: {
         userId: me,
         type: "MESSAGE_RECEIVED",
@@ -56,6 +53,12 @@ export async function GET(request: NextRequest) {
         data: { path: ["conversationId"], equals: conversationId },
       },
       data: { isRead: true, readAt: now },
+    })
+
+    const messages = await prismaDirect.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: "asc" },
+      select: messageSelect,
     })
 
     const other = getOtherParticipant(conversation, me)
@@ -68,10 +71,7 @@ export async function GET(request: NextRequest) {
         email: other.email,
         role: other.role,
       },
-      messages: messages.map((m) => ({
-        ...m,
-        createdAt: m.createdAt.toISOString(),
-      })),
+      messages: messages.map(serializeMessage),
     })
   } catch (error) {
     console.error("[API] Messages fetch error:", error)
@@ -88,9 +88,10 @@ export async function POST(request: NextRequest) {
   try {
     const me = session.user.id
     const body = await request.json()
-    const { participantId, message } = body as {
+    const { participantId, message, replyToId } = body as {
       participantId?: string
       message?: string
+      replyToId?: string | null
     }
 
     if (!participantId || participantId === me) {
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Message is too long" }, { status: 400 })
     }
 
-    const participant = await prisma.user.findFirst({
+    const participant = await prismaDirect.user.findFirst({
       where: {
         id: participantId,
         role: { not: "VIEWER" },
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Staff member not found" }, { status: 404 })
     }
 
-    const meRow = await prisma.user.findUnique({
+    const meRow = await prismaDirect.user.findUnique({
       where: { id: me },
       select: { name: true },
     })
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     const [userAId, userBId] = canonicalPair(me, participantId)
 
-    const conversation = await prisma.conversation.upsert({
+    const conversation = await prismaDirect.conversation.upsert({
       where: { userAId_userBId: { userAId, userBId } },
       update: { lastMessageAt: new Date() },
       create: {
@@ -141,23 +142,30 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const created = await prisma.message.create({
+    let replyToIdResolved: string | null = null
+    if (replyToId) {
+      const replyTo = await prismaDirect.message.findFirst({
+        where: { id: replyToId, conversationId: conversation.id },
+        select: { id: true },
+      })
+      if (!replyTo) {
+        return NextResponse.json({ error: "Message to reply to not found" }, { status: 400 })
+      }
+      replyToIdResolved = replyTo.id
+    }
+
+    const created = await prismaDirect.message.create({
       data: {
         conversationId: conversation.id,
         senderId: me,
         body: message.trim(),
+        ...(replyToIdResolved ? { replyToId: replyToIdResolved } : {}),
       },
-      select: {
-        id: true,
-        senderId: true,
-        body: true,
-        isRead: true,
-        createdAt: true,
-      },
+      select: messageSelect,
     })
 
     try {
-      await prisma.notification.create({
+      await prismaDirect.notification.create({
         data: {
           userId: participantId,
           type: "MESSAGE_RECEIVED",
@@ -177,10 +185,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         conversationId: conversation.id,
-        message: {
-          ...created,
-          createdAt: created.createdAt.toISOString(),
-        },
+        message: serializeMessage(created),
       },
       { status: 201 }
     )

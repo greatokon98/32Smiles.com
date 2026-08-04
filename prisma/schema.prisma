@@ -182,6 +182,12 @@ model Message {
   body           String       @db.Text
   isRead         Boolean      @default(false)
   readAt         DateTime?
+  deliveredAt    DateTime?
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  replyToId      String?
+  replyTo        Message?     @relation("MessageReply", fields: [replyToId], references: [id])
+  replies        Message[]    @relation("MessageReply")
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
