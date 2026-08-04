@@ -83,7 +83,7 @@ export function HeaderUserMenu() {
           </div>
           <div className="border-t border-gray-100 py-1">
             <button
-              onClick={() => signOut({ callbackUrl: "/admin/login" })}
+              onClick={() => signOut({ callbackUrl: "/" })}
               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-red-50 hover:text-red-600"
             >
               <LogOut className="h-4 w-4" />

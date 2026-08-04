@@ -154,7 +154,7 @@ export function MobileNav() {
                   Notifications
                 </Link>
                 <button
-                  onClick={() => signOut({ callbackUrl: "/admin/login" })}
+                  onClick={() => signOut({ callbackUrl: "/" })}
                   className="flex items-center gap-2 w-full px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors"
                 >
                   <LogOut className="h-4 w-4" />

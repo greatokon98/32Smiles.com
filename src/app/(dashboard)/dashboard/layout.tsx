@@ -88,7 +88,7 @@ function DashboardSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolean; 
 
         <div className="border-t border-gray-200 p-3">
           <button
-            onClick={() => signOut({ callbackUrl: "/admin/login" })}
+            onClick={() => signOut({ callbackUrl: "/" })}
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors"
           >
             <LogOut className="h-5 w-5" />
