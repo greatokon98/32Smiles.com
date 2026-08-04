@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma"
 import { sendEmail } from "@/lib/email"
 import type { NotificationType } from "@prisma/client"
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://32smiless.vercel.app"
 const FROM_EMAIL = process.env.EMAIL_FROM || "great.okon98@gmail.com"
 const APP_NAME = "32Smiles Dental Clinic"
 

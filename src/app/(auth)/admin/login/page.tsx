@@ -67,7 +67,7 @@ function LoginForm({ googleConfigured }: { googleConfigured: boolean }) {
             type="email"
             required
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-            placeholder="admin@32smiles.com"
+            placeholder="you@example.com"
           />
         </div>
 
@@ -136,8 +136,8 @@ export default function LoginPage() {
             <Link href="/" className="text-2xl font-bold text-primary-600">
               {siteConfig.name}
             </Link>
-            <h1 className="text-xl font-semibold text-gray-900 mt-4">Admin Login</h1>
-            <p className="text-gray-500 text-sm mt-1">Sign in to access the dashboard</p>
+            <h1 className="text-xl font-semibold text-gray-900 mt-4">Welcome Back</h1>
+            <p className="text-gray-500 text-sm mt-1">Sign in to access your account</p>
           </div>
 
           <Suspense fallback={<div className="text-center text-gray-500">Loading...</div>}>

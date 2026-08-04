@@ -3,7 +3,7 @@ export const siteConfig = {
   tagline: "Dental Care Solution",
   description:
     "Premium dental care in Victoria Island, Lagos. Services include teeth whitening, root canal, dental implants, and cosmetic dentistry.",
-  url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  url: process.env.NEXT_PUBLIC_APP_URL || "https://32smiless.vercel.app",
   contact: {
     phone: "+(234) 810 368 7424",
     email: "admin@32smiles.com",

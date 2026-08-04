@@ -85,7 +85,7 @@ async function getFromEmail(): Promise<string> {
   return "great.okon98@gmail.com"
 }
 const APP_NAME = "32Smiles Dental Clinic"
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://32smiless.vercel.app"
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
 const RATE_LIMIT_MAX = 10
