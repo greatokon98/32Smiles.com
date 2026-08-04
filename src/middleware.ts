@@ -18,7 +18,11 @@ export default async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET })
+  const token = await getToken({
+    req,
+    secret: process.env.AUTH_SECRET,
+    secureCookie: req.nextUrl.protocol === "https:",
+  })
   const isAdminApi = pathname.startsWith("/api/admin")
   const isAdminPage = pathname.startsWith("/admin")
   const isDashboard = pathname.startsWith("/dashboard")
