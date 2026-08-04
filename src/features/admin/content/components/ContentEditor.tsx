@@ -25,6 +25,7 @@ import {
   Image,
   Tag,
   FileText,
+  Undo2,
 } from "lucide-react"
 
 interface ContentEditorProps {
@@ -47,9 +48,10 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
   const [activeTab, setActiveTab] = useState<"content" | "seo" | "settings">("content")
   const [saving, setSaving] = useState(false)
   const [autoSaving, setAutoSaving] = useState(false)
+  const hasDraft = !!(initialData?.hasDraft)
 
   const [featuredImageId, setFeaturedImageId] = useState((initialData?.featuredImageId as string) || "")
-  const [featuredImageUrl, setFeaturedImageUrl] = useState((initialData?.featuredImage as { url?: string })?.url || "")
+  const [featuredImageUrl, setFeaturedImageUrl] = useState((initialData?.featuredImageUrl as string) || (initialData?.featuredImage as { url?: string })?.url || "")
 
   const [galleryCategory, setGalleryCategory] = useState((initialData?.galleryItem as { category?: string })?.category || "")
   const [galleryCaption, setGalleryCaption] = useState((initialData?.galleryItem as { caption?: string })?.caption || "")
@@ -63,7 +65,7 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
   const [teamSpecialty, setTeamSpecialty] = useState((initialData?.teamMember as { specialty?: string })?.specialty || "")
   const [teamCredentials, setTeamCredentials] = useState((initialData?.teamMember as { credentials?: string })?.credentials || "")
   const [teamPhotoFileId, setTeamPhotoFileId] = useState((initialData?.teamMember as { photoFileId?: string })?.photoFileId || "")
-  const [teamPhotoUrl, setTeamPhotoUrl] = useState((initialData?.teamMember as { photoFile?: { url?: string } })?.photoFile?.url || "")
+  const [teamPhotoUrl, setTeamPhotoUrl] = useState((initialData?.teamPhotoUrl as string) || (initialData?.teamMember as { photoFile?: { url?: string } })?.photoFile?.url || "")
   const [teamBio, setTeamBio] = useState((initialData?.teamMember as { bio?: string })?.bio || "")
   const [teamSocialLinks, setTeamSocialLinks] = useState(JSON.stringify((initialData?.teamMember as { socialLinks?: Record<string, string> })?.socialLinks || {}, null, 2))
 
@@ -71,9 +73,9 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
 
   // ─── Gallery Item (additional) ───────────────────────────
   const [galleryImageFileId, setGalleryImageFileId] = useState((initialData?.galleryItem as { imageFileId?: string })?.imageFileId || "")
-  const [galleryImageFileUrl, setGalleryImageFileUrl] = useState((initialData?.galleryItem as { imageFile?: { url?: string } })?.imageFile?.url || "")
+  const [galleryImageFileUrl, setGalleryImageFileUrl] = useState((initialData?.galleryImageFileUrl as string) || (initialData?.galleryItem as { imageFile?: { url?: string } })?.imageFile?.url || "")
   const [galleryFullImageFileId, setGalleryFullImageFileId] = useState((initialData?.galleryItem as { fullImageFileId?: string })?.fullImageFileId || "")
-  const [galleryFullImageFileUrl, setGalleryFullImageFileUrl] = useState((initialData?.galleryItem as { fullImageFile?: { url?: string } })?.fullImageFile?.url || "")
+  const [galleryFullImageFileUrl, setGalleryFullImageFileUrl] = useState((initialData?.galleryFullImageFileUrl as string) || (initialData?.galleryItem as { fullImageFile?: { url?: string } })?.fullImageFile?.url || "")
 
   // ─── Testimonial ─────────────────────────────────────────
   const [testimonialClientName, setTestimonialClientName] = useState((initialData?.testimonial as { clientName?: string })?.clientName || "")
@@ -165,6 +167,7 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
     const payload: Record<string, unknown> = {
       title, slug: slug || slugify(title), excerpt, body, status, featured, tags, type,
       featuredImageId: featuredImageId || null,
+      featuredImageUrl: featuredImageUrl || null,
     }
     if (type === "GALLERY_ITEM") {
       payload.galleryItem = {
@@ -172,6 +175,8 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
         sortOrder: Number(gallerySortOrder),
         imageFileId: galleryImageFileId || null,
         fullImageFileId: galleryFullImageFileId || null,
+        imageFileUrl: galleryImageFileUrl || null,
+        fullImageFileUrl: galleryFullImageFileUrl || null,
       }
     }
     if (type === "PRODUCT") {
@@ -191,7 +196,7 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
     if (type === "TEAM_MEMBER") {
       let parsedSocial: Record<string, string> | undefined
       try { const p = JSON.parse(teamSocialLinks); if (typeof p === "object" && p !== null) parsedSocial = p } catch {}
-      payload.teamMember = { specialty: teamSpecialty, credentials: teamCredentials, photoFileId: teamPhotoFileId || null, bio: teamBio || undefined, socialLinks: parsedSocial }
+      payload.teamMember = { specialty: teamSpecialty, credentials: teamCredentials, photoFileId: teamPhotoFileId || null, teamPhotoUrl: teamPhotoUrl || null, bio: teamBio || undefined, socialLinks: parsedSocial }
     }
     if (type === "TESTIMONIAL") {
       payload.testimonial = {
@@ -230,12 +235,11 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
     return payload
   }
 
-  async function handleSave(publishStatus?: string) {
+  async function handleSave() {
     if (type === "FAQ" ? !faqQuestion : !title) { alert(type === "FAQ" ? "Question is required" : "Title is required"); return }
     setSaving(true)
     try {
       const payload = buildPayload()
-      if (publishStatus) payload.status = publishStatus
       const url = isEditing ? `/api/admin/content/${type}/${id}` : `/api/admin/content/${type}`
       const res = await fetch(url, { method: isEditing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
       if (res.ok) {
@@ -250,7 +254,63 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
   }
 
   async function handlePublish() {
-    await handleSave("PUBLISHED")
+    if (type === "FAQ" ? !faqQuestion : !title) { alert(type === "FAQ" ? "Question is required" : "Title is required"); return }
+    setSaving(true)
+    try {
+      const payload = buildPayload()
+      payload.status = "PUBLISHED"
+      const url = isEditing ? `/api/admin/content/${type}/${id}` : `/api/admin/content/${type}`
+      const saveRes = await fetch(url, { method: isEditing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+      if (!saveRes.ok) {
+        const error = await saveRes.json().catch(() => ({}))
+        toast.error(error.error || "Failed to save")
+        return
+      }
+
+      const content = await saveRes.json()
+      if (!isEditing) {
+        toast.success("Published")
+        router.replace(`/admin/content/${type}/${content.id}`)
+        return
+      }
+
+      const pubRes = await fetch(`/api/admin/content/${type}/${id}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "PUBLISHED" }),
+      })
+      if (!pubRes.ok) {
+        const error = await pubRes.json().catch(() => ({}))
+        toast.error(error.error || "Failed to publish")
+        return
+      }
+      toast.success("Published")
+      router.refresh()
+    } catch (error) {
+      toast.error("Failed to publish")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDiscard() {
+    if (!id) return
+    if (!window.confirm("Discard all unpublished changes? This cannot be undone.")) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/admin/content/${type}/${id}/discard-draft`, { method: "DELETE" })
+      if (res.ok) {
+        toast.success("Unpublished changes discarded")
+        router.refresh()
+      } else {
+        const error = await res.json().catch(() => ({}))
+        toast.error(error.error || "Failed to discard changes")
+      }
+    } catch (error) {
+      toast.error("Failed to discard changes")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const wordCount = stripHtml(body).split(/\s+/).filter(Boolean).length
@@ -270,11 +330,19 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
           <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-lg"><ArrowLeft className="h-5 w-5" /></button>
           <div>
             <h1 className="text-xl font-bold text-gray-900">{isEditing ? "Edit" : "Create"} {typeName}</h1>
-            {autoSaving && <p className="text-xs text-gray-400 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Auto-saving...</p>}
+            <div className="flex items-center gap-2">
+              {autoSaving && <p className="text-xs text-gray-400 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Auto-saving...</p>}
+              {hasDraft && <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">Unpublished changes</span>}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-500">{wordCount} words · {readingTime} min read</span>
+          {hasDraft && (
+            <button onClick={handleDiscard} disabled={saving} className="px-4 py-2 border border-amber-300 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-50 disabled:opacity-50 inline-flex items-center gap-2">
+              <Undo2 className="h-4 w-4" /> Discard Changes
+            </button>
+          )}
           <button onClick={() => handleSave()} disabled={saving} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Draft
           </button>
@@ -381,7 +449,7 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
                   )}
                 </div>
               )}
-              {activeTab === "seo" && <SEOEditor contentId={id || ""} initialData={initialData?.seoMetadata as Record<string, unknown> | undefined} contentTitle={title} contentExcerpt={excerpt} />}
+              {activeTab === "seo" && <SEOEditor contentId={id || ""} type={type} initialData={initialData?.seoMetadata as Record<string, unknown> | undefined} contentTitle={title} contentExcerpt={excerpt} />}
               {activeTab === "settings" && (
                 <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">

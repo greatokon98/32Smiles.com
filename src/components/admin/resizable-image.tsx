@@ -36,31 +36,20 @@ export function imageAttrsToStyle(width: number | null, align: ImageAlign | null
   return parts.join(";")
 }
 
-// Editor-only styles for the node view wrapper. The wrapper stays
-// inline-block so it stays valid inside a paragraph; centering is done with
-// relative positioning + transform.
+// Editor-only styles for the node view wrapper. Kept visually identical to the
+// inline styles emitted by imageAttrsToStyle so the editor matches the public
+// page: block layout with margin-based centering (no relative/translate tricks).
 function wrapperStyle(width: number | null, align: ImageAlign | null): CSSProperties {
-  const style: CSSProperties = { position: "relative", display: "inline-block", maxWidth: "100%", margin: "2rem 0" }
+  const style: CSSProperties = { position: "relative", display: "block", maxWidth: "100%", margin: "2rem auto" }
   if (align === "float-left") {
-    style.float = "left"
-    style.width = `${width ?? 45}%`
-    style.margin = "0 1.5rem 1rem 0"
-    return style
+    return { position: "relative", display: "block", width: `${width ?? 45}%`, margin: "0 1.5rem 1rem 0", float: "left" }
   }
   if (align === "float-right") {
-    style.float = "right"
-    style.width = `${width ?? 45}%`
-    style.margin = "0 0 1rem 1.5rem"
-    return style
+    return { position: "relative", display: "block", width: `${width ?? 45}%`, margin: "0 0 1rem 1.5rem", float: "right" }
   }
-  style.width = `${width ?? 100}%`
-  if (align === "right") {
-    style.left = "100%"
-    style.transform = "translateX(-100%)"
-  } else if (align !== "left") {
-    style.left = "50%"
-    style.transform = "translateX(-50%)"
-  }
+  if (width) style.width = `${width}%`
+  if (align === "left") style.margin = "2rem auto 2rem 0"
+  else if (align === "right") style.margin = "2rem 0 2rem auto"
   return style
 }
 

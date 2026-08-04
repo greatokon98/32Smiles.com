@@ -209,7 +209,7 @@ export default async function PatientArticlePage({ params }: Props) {
                     [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-gray-900 [&_h3]:mt-8 [&_h3]:mb-4
                     [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:text-gray-900 [&_h4]:mt-6 [&_h4]:mb-3
                     [&_p]:mb-5 [&_p]:leading-relaxed
-                    [&_ul]:space-y-2 [&_ul]:my-5 [&_ul]:pl-6
+                    [&_ul]:space-y-2 [&_ul]:my-5 [&_ul]:pl-6 [&_ul]:list-disc
                     [&_ol]:space-y-2 [&_ol]:my-5 [&_ol]:pl-6 [&_ol]:list-decimal
                     [&_li]:text-gray-700
                     [&_a]:text-teal-600 [&_a]:underline [&_a]:hover:text-teal-700

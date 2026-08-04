@@ -5,6 +5,7 @@ import { Search, Globe, Eye, AlertTriangle, Check } from "lucide-react"
 
 interface SEOEditorProps {
   contentId: string
+  type?: string
   initialData?: {
     metaTitle?: string | null
     metaDescription?: string | null
@@ -22,6 +23,7 @@ interface SEOEditorProps {
 
 export default function SEOEditor({
   contentId,
+  type,
   initialData,
   contentTitle,
   contentExcerpt,
@@ -47,7 +49,7 @@ export default function SEOEditor({
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
-      const res = await fetch(`/api/admin/content/${contentId}/seo`, {
+      const res = await fetch(`/api/admin/content/${type}/${contentId}/seo`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -71,7 +73,7 @@ export default function SEOEditor({
     } finally {
       setSaving(false)
     }
-  }, [contentId, metaTitle, metaDescription, ogTitle, ogDescription, ogImage, focusKeyword, canonicalUrl, noIndex, noFollow])
+  }, [type, contentId, metaTitle, metaDescription, ogTitle, ogDescription, ogImage, focusKeyword, canonicalUrl, noIndex, noFollow])
 
   return (
     <div className="space-y-6">

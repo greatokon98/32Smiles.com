@@ -245,7 +245,7 @@ export function ProductDetail({ product }: { product: ProductItem }) {
                         [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-gray-900 [&_h3]:mt-6 [&_h3]:mb-3
                         [&_h4]:text-base [&_h4]:font-semibold [&_h4]:text-gray-900 [&_h4]:mt-5 [&_h4]:mb-2
                         [&_p]:mb-3 [&_p]:leading-relaxed
-                        [&_ul]:space-y-2 [&_ul]:my-3 [&_ul]:pl-5
+                        [&_ul]:space-y-2 [&_ul]:my-3 [&_ul]:pl-5 [&_ul]:list-disc
                         [&_ol]:space-y-2 [&_ol]:my-3 [&_ol]:pl-5 [&_ol]:list-decimal
                         [&_li]:text-gray-600
                         [&_a]:text-primary-600 [&_a]:underline

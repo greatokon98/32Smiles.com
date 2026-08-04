@@ -231,6 +231,9 @@ model Content {
   updatedAt   DateTime      @updatedAt
   deletedAt   DateTime?
 
+  hasDraft    Boolean       @default(false)
+  draftData   Json?
+
   versions        ContentVersion[]
   seoMetadata     SEOMetadata?
   tags            ContentTag[]

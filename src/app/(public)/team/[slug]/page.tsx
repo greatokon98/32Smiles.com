@@ -207,7 +207,7 @@ export default async function TeamMemberPage({ params }: Props) {
                       [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-gray-900 [&_h3]:mt-8 [&_h3]:mb-4
                       [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:text-gray-900 [&_h4]:mt-6 [&_h4]:mb-3
                       [&_p]:mb-4 [&_p]:leading-relaxed
-                      [&_ul]:space-y-2 [&_ul]:my-4 [&_ul]:pl-5
+                      [&_ul]:space-y-2 [&_ul]:my-4 [&_ul]:pl-5 [&_ul]:list-disc
                       [&_ol]:space-y-2 [&_ol]:my-4 [&_ol]:pl-5 [&_ol]:list-decimal
                       [&_li]:text-gray-600
                       [&_a]:text-primary-600 [&_a]:underline [&_a]:hover:text-primary-700

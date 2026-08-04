@@ -23,12 +23,12 @@ function normalizeDatabaseUrl(raw: string | undefined): string {
       const params = new URLSearchParams(url.search)
       const additions: Array<[string, string]> = [
         ["pgbouncer", "true"],
-        ["connection_limit", "1"],
-        ["pool_timeout", "5"],
+        ["connection_limit", "5"],
+        ["pool_timeout", "15"],
         ["sslmode", "require"],
       ]
       for (const [key, value] of additions) {
-        if (!params.has(key)) {
+        if (params.get(key) !== value) {
           params.set(key, value)
           changed = true
         }

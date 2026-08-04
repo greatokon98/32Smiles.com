@@ -216,6 +216,8 @@ export const contentRepository = {
       data: {
         status: "PUBLISHED",
         publishedAt: new Date(),
+        hasDraft: false,
+        draftData: Prisma.JsonNull,
       },
     })
   },

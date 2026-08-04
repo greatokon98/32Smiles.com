@@ -78,7 +78,7 @@ export default async function ContentEditPage({
         </div>
       </header>
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <ContentEditor type={type} id={id} initialData={(serializeContent(content) as Record<string, unknown>) || undefined} />
+        <ContentEditor key={String((content as { updatedAt?: unknown })?.updatedAt ?? id)} type={type} id={id} initialData={(serializeContent(content) as Record<string, unknown>) || undefined} />
       </div>
     </div>
   )

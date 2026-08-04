@@ -1,4 +1,4 @@
-import { ContentType, ContentStatus } from "@prisma/client"
+import { ContentType, ContentStatus, Prisma } from "@prisma/client"
 import { contentRepository, ContentWithRelations, PaginatedResult } from "@/repositories/content.repository"
 import {
   CreateContentInput,
@@ -19,7 +19,23 @@ export const contentService = {
   },
 
   async getById(id: string): Promise<ContentWithRelations | null> {
-    return contentRepository.findById(id)
+    const content = await contentRepository.findById(id)
+    // The editor should show pending (unpublished) edits on top of the live
+    // version. Public pages use getByTypeAndSlug and are unaffected.
+    if (!content || !content.hasDraft || !content.draftData) return content
+
+    const draft = content.draftData as Record<string, unknown>
+    const merged: Record<string, unknown> = {
+      ...(content as unknown as Record<string, unknown>),
+      ...draft,
+    }
+    if (draft.seo && typeof draft.seo === "object") {
+      merged.seoMetadata = {
+        ...((content.seoMetadata as object | null) ?? {}),
+        ...(draft.seo as object),
+      }
+    }
+    return merged as ContentWithRelations
   },
 
   async getByTypeAndSlug(type: ContentType, slug: string): Promise<ContentWithRelations | null> {
@@ -159,7 +175,30 @@ export const contentService = {
     return content
   },
 
-  async update(id: string, input: Partial<CreateContentInput> & { teamMember?: Record<string, unknown>; galleryItem?: Record<string, unknown>; testimonial?: Record<string, unknown>; faq?: Record<string, unknown>; blogPost?: Record<string, unknown>; product?: Record<string, unknown>; educationArticle?: Record<string, unknown> }, authorId: string) {
+  async update(
+    id: string,
+    input: Partial<CreateContentInput> & { teamMember?: Record<string, unknown>; galleryItem?: Record<string, unknown>; testimonial?: Record<string, unknown>; faq?: Record<string, unknown>; blogPost?: Record<string, unknown>; product?: Record<string, unknown>; educationArticle?: Record<string, unknown> },
+    authorId: string,
+    forceLive = false
+  ) {
+    const existing = await contentRepository.findById(id)
+    if (!existing) throw new Error("Content not found")
+
+    // Draft mode: the live version is PUBLISHED and the edit does not change the
+    // status, so the change is kept off-site (in draftData) until explicitly
+    // published. Public pages keep serving the live, PUBLISHED version.
+    const isPublished = existing.status === "PUBLISHED"
+    const incomingStatus = input.status
+    const staysPublished = incomingStatus === undefined || incomingStatus === "PUBLISHED"
+
+    if (!forceLive && isPublished && staysPublished) {
+      const draftData = { ...input, savedAt: new Date().toISOString() }
+      return contentRepository.update(id, {
+        hasDraft: true,
+        draftData: draftData as unknown as Prisma.InputJsonValue,
+      })
+    }
+
     // Create version before updating
     await contentRepository.createVersion(id, authorId, "Auto-save before update")
 
@@ -391,9 +430,43 @@ export const contentService = {
   },
 
   async publish(id: string, authorId: string) {
-    // Create version before publishing
-    await contentRepository.createVersion(id, authorId, "Publishing content")
+    const existing = await contentRepository.findById(id)
+    if (!existing) throw new Error("Content not found")
+
+    const draft = existing.draftData as unknown as (Partial<CreateContentInput> & Record<string, unknown>) | null
+
+    if (existing.hasDraft && draft) {
+      // Apply the stored draft to the live version, then clear the draft.
+      await this.update(
+        id,
+        { ...draft, status: "PUBLISHED" as ContentStatus },
+        authorId,
+        true
+      )
+
+      await contentRepository.update(id, {
+        status: "PUBLISHED",
+        publishedAt: new Date(),
+        hasDraft: false,
+        draftData: Prisma.JsonNull,
+      })
+
+      if (draft.seo && typeof draft.seo === "object") {
+        await this.applySEOLive(id, draft.seo as Record<string, string>)
+      }
+
+      return contentRepository.findById(id)
+    }
+
+    // Plain publish (no draft) — clear any stale draft state.
     return contentRepository.publish(id)
+  },
+
+  async discardDraft(id: string) {
+    return contentRepository.update(id, {
+      hasDraft: false,
+      draftData: Prisma.JsonNull,
+    })
   },
 
   async archive(id: string) {
@@ -463,6 +536,37 @@ export const contentService = {
   // ─── SEO Helpers ────────────────────────────────────────
 
   async updateSEO(contentId: string, seoData: {
+    metaTitle?: string
+    metaDescription?: string
+    ogTitle?: string
+    ogDescription?: string
+    ogImage?: string
+    focusKeyword?: string
+    canonicalUrl?: string
+  }) {
+    const prisma = (await import("@/lib/prisma")).default
+    const content = await prisma.content.findUnique({
+      where: { id: contentId },
+      select: { status: true, draftData: true },
+    })
+    if (!content) throw new Error("Content not found")
+
+    // Published content: keep SEO edits off-site (in the draft) until publish.
+    if (content.status === "PUBLISHED") {
+      const currentDraft = (content.draftData as Record<string, unknown> | null) ?? {}
+      return prisma.content.update({
+        where: { id: contentId },
+        data: {
+          hasDraft: true,
+          draftData: { ...currentDraft, seo: seoData } as unknown as Prisma.InputJsonValue,
+        },
+      })
+    }
+
+    return this.applySEOLive(contentId, seoData)
+  },
+
+  async applySEOLive(contentId: string, seoData: {
     metaTitle?: string
     metaDescription?: string
     ogTitle?: string

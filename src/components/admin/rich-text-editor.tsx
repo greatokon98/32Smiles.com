@@ -3,6 +3,7 @@
 import { forwardRef, useEffect, useRef, useState } from "react"
 import { useEditor, EditorContent } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
+import { DragHandle } from "@tiptap/extension-drag-handle-react"
 import StarterKit from "@tiptap/starter-kit"
 import { ResizableImage, IMAGE_PRESETS, clampImageWidth } from "@/components/admin/resizable-image"
 import Link from "@tiptap/extension-link"
@@ -34,6 +35,7 @@ import {
   Delete,
   Eraser,
   FileCode2,
+  GripVertical,
   Heading1,
   Heading2,
   Heading3,
@@ -136,7 +138,7 @@ export function RichTextEditor({
         HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" },
       }),
       Placeholder.configure({ placeholder }),
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      TextAlign.configure({ types: ["heading", "paragraph", "listItem"] }),
       Underline,
       TableKit,
     ],
@@ -599,7 +601,12 @@ export function RichTextEditor({
         </div>
       ) : (
         <div style={{ minHeight }} className="max-h-[600px] overflow-y-auto">
-          <EditorContent editor={editor} />
+          <EditorContent editor={editor} className="relative" />
+          {editor && !sourceMode && (
+            <DragHandle editor={editor} nested>
+              <GripVertical className="h-4 w-4" />
+            </DragHandle>
+          )}
           {editor && !sourceMode && (
             <BubbleMenu
               editor={editor}
