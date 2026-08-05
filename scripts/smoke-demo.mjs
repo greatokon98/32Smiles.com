@@ -582,6 +582,54 @@ let apptId = ""
   }
 }
 
+// ────────────────────────── 9.75 NOTIFICATION CLICK-THROUGH ────────────
+console.log("\n== Notification bell click-through ==")
+let clickOrderId = ""
+if (patientOrderNumber) {
+  // create a patient "Order Processing" notification through the real status path
+  clickOrderId = psql(`SELECT id FROM orders WHERE "orderNumber" = '${patientOrderNumber}'`)
+  await login(accounts.superadmin[0], accounts.superadmin[1])
+  await goto("/admin/orders")
+  const row = page.locator(`button:has-text("${patientOrderNumber}")`).first()
+  await row.click()
+  await page.waitForTimeout(300)
+  await row.locator("xpath=..").getByRole("button", { name: "PROCESSING" }).click()
+  await page.waitForTimeout(1500)
+  const dbStatus = psql(`SELECT status FROM orders WHERE "orderNumber" = '${patientOrderNumber}'`)
+  report("Bell", "order set to PROCESSING (creates patient notification)", dbStatus === "PROCESSING", `db="${dbStatus}"`)
+
+  // patient opens the bell → notification links to the specific order
+  await login(accounts.patient[0], accounts.patient[1])
+  await goto("/dashboard")
+  await page.getByTitle("Notifications").click()
+  await page.waitForTimeout(1200)
+  const bellShows = await page.getByText("Order Processing").first().isVisible().catch(() => false)
+  report("Bell", "bell dropdown shows 'Order Processing' notification", bellShows)
+
+  const clickTarget = page.locator('a[href*="/dashboard/orders?highlight="]').first()
+  const href = ((await clickTarget.getAttribute("href").catch(() => null)) || "")
+  report("Bell", "notification row links to /dashboard/orders?highlight=<id>", href.startsWith("/dashboard/orders?highlight="), href)
+
+  if (href) {
+    await Promise.all([
+      page.waitForURL(/\/dashboard\/orders\?highlight=/, { timeout: 20000 }),
+      clickTarget.click(),
+    ])
+    await page.waitForTimeout(900)
+    const navUrl = page.url()
+    const orderExpanded = await page.getByText("Subtotal").isVisible().catch(() => false)
+    report("Bell", "clicking notification navigates to orders page with order expanded", navUrl.includes("highlight=") && orderExpanded, navUrl)
+
+    const notifRead = psql(`SELECT "isRead" FROM notifications WHERE data->>'orderId' = '${clickOrderId}' AND type = 'SYSTEM_ALERT' ORDER BY "createdAt" DESC LIMIT 1`)
+    report("Bell", "clicking notification marks it read", notifRead === "t", `isRead=${notifRead}`)
+
+    // highlight fades after the window (no permanent styling)
+    await page.waitForTimeout(4200)
+    const stillExpanded = await page.getByText("Subtotal").isVisible().catch(() => false)
+    report("Bell", "order stays expanded after highlight fades", stillExpanded)
+  }
+}
+
 // ────────────────────────── 10. CHANGE PASSWORD ────────────────────────
 console.log("\n== Change password + re-login ==")
 {

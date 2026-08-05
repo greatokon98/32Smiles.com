@@ -3,26 +3,15 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
-import {
-  Bell,
-  BellRing,
-  Calendar,
-  CalendarX,
-  CalendarCheck,
-  CalendarClock,
-  CalendarPlus,
-  MessageSquare,
-  MessagesSquare,
-  UserCheck,
-  Sparkles,
-  Pencil,
-  FileText,
-  Settings,
-  Check,
-  X,
-  Loader2,
-} from "lucide-react"
+import { Bell, BellRing } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  TYPE_ICONS,
+  TYPE_COLORS,
+  getNotificationLink,
+  formatTimeAgo,
+  markNotificationRead,
+} from "@/features/notifications/notification-utils"
 
 interface NotificationBellProps {
   userId?: string
@@ -38,87 +27,11 @@ interface Notification {
   createdAt: string
 }
 
-const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  APPOINTMENT_CONFIRMED: CalendarCheck,
-  APPOINTMENT_REMINDER: CalendarClock,
-  APPOINTMENT_UPDATED: Calendar,
-  APPOINTMENT_CANCELLED: CalendarX,
-  APPOINTMENT_BOOKED: CalendarPlus,
-  CONTACT_RECEIVED: MessageSquare,
-  CONTACT_ASSIGNED: UserCheck,
-  MESSAGE_RECEIVED: MessagesSquare,
-  MESSAGE_EDITED: Pencil,
-  AI_CONTENT_READY: Sparkles,
-  AI_CONTENT_APPROVED: Sparkles,
-  AI_CONTENT_REJECTED: Sparkles,
-  CONTENT_PUBLISHED: FileText,
-  SYSTEM_ALERT: Settings,
-}
-
-const TYPE_COLORS: Record<string, string> = {
-  APPOINTMENT_CONFIRMED: "bg-green-100 text-green-700",
-  APPOINTMENT_REMINDER: "bg-blue-100 text-blue-700",
-  APPOINTMENT_UPDATED: "bg-yellow-100 text-yellow-700",
-  APPOINTMENT_CANCELLED: "bg-red-100 text-red-700",
-  APPOINTMENT_BOOKED: "bg-indigo-100 text-indigo-700",
-  CONTACT_RECEIVED: "bg-purple-100 text-purple-700",
-  CONTACT_ASSIGNED: "bg-violet-100 text-violet-700",
-  MESSAGE_RECEIVED: "bg-teal-100 text-teal-700",
-  MESSAGE_EDITED: "bg-amber-100 text-amber-700",
-  AI_CONTENT_READY: "bg-indigo-100 text-indigo-700",
-  AI_CONTENT_APPROVED: "bg-green-100 text-green-700",
-  AI_CONTENT_REJECTED: "bg-red-100 text-red-700",
-  CONTENT_PUBLISHED: "bg-emerald-100 text-emerald-700",
-  SYSTEM_ALERT: "bg-orange-100 text-orange-700",
-}
-
-function getNotificationLink(
-  type: string,
-  data: Record<string, unknown> | null,
-  isPatient: boolean
-): string | null {
-  if (data && typeof data === "object") {
-    if ("appointmentId" in data) return isPatient ? "/dashboard/appointments" : "/admin/appointments"
-    if ("orderId" in data || "orderNumber" in data) return isPatient ? "/dashboard/orders" : "/admin/orders"
-    if ("contactId" in data) return "/admin/contacts"
-    if ("conversationId" in data)
-      return isPatient
-        ? "/dashboard/notifications"
-        : `/admin/communication?conversationId=${data.conversationId}`
-    if ("contentId" in data) return "/admin/content"
-    if ("draftId" in data) return "/admin/ai-studio"
-  }
-
-  if (type.startsWith("APPOINTMENT_")) return isPatient ? "/dashboard/appointments" : "/admin/appointments"
-  if (type === "CONTACT_RECEIVED") return "/admin/contacts"
-  if (type.startsWith("AI_")) return "/admin/ai-studio"
-  if (type === "CONTENT_PUBLISHED") return "/admin/content"
-  return isPatient ? "/dashboard" : "/admin/dashboard"
-}
-
-function formatTimeAgo(dateStr: string): string {
-  const now = new Date()
-  const date = new Date(dateStr)
-  const diff = now.getTime() - date.getTime()
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-
-  if (days > 7) {
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-  }
-  if (days > 0) return `${days}d ago`
-  if (hours > 0) return `${hours}h ago`
-  if (minutes > 0) return `${minutes}m ago`
-  return "Just now"
-}
-
 export default function NotificationBell(_props: NotificationBellProps) {
   const { data: session, status } = useSession()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
-  const [markingId, setMarkingId] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const isPatient = session?.user?.role === "VIEWER"
@@ -126,9 +39,7 @@ export default function NotificationBell(_props: NotificationBellProps) {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch(
-        `${notificationsApi}?limit=10`
-      )
+      const res = await fetch(`${notificationsApi}?limit=10`)
       if (res.ok) {
         return await res.json()
       }
@@ -160,10 +71,7 @@ export default function NotificationBell(_props: NotificationBellProps) {
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false)
       }
     }
@@ -175,25 +83,17 @@ export default function NotificationBell(_props: NotificationBellProps) {
     return null
   }
 
-  async function handleMarkAsRead(id: string) {
-    setMarkingId(id)
-    try {
-      const res = await fetch(`${notificationsApi}/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isRead: true }),
-      })
-      if (res.ok) {
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-        )
-        setUnreadCount((prev) => Math.max(0, prev - 1))
+  function handleOpenNotification(id: string) {
+    setIsOpen(false)
+    setNotifications((prev) => {
+      const target = prev.find((n) => n.id === id)
+      if (target && !target.isRead) {
+        markNotificationRead(notificationsApi, id)
+        setUnreadCount((count) => Math.max(0, count - 1))
+        return prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
       }
-    } catch {
-      console.error("Failed to mark notification as read")
-    } finally {
-      setMarkingId(null)
-    }
+      return prev
+    })
   }
 
   async function handleMarkAllAsRead() {
@@ -201,18 +101,8 @@ export default function NotificationBell(_props: NotificationBellProps) {
     if (unreadIds.length === 0) return
 
     try {
-      await Promise.all(
-        unreadIds.map((id) =>
-          fetch(`${notificationsApi}/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ isRead: true }),
-          })
-        )
-      )
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, isRead: true }))
-      )
+      await Promise.all(unreadIds.map((id) => markNotificationRead(notificationsApi, id)))
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
       setUnreadCount(0)
     } catch {
       console.error("Failed to mark all as read")
@@ -277,8 +167,7 @@ export default function NotificationBell(_props: NotificationBellProps) {
             ) : (
               <div className="divide-y divide-gray-50">
                 {notifications.map((notification) => {
-                  const Icon =
-                    TYPE_ICONS[notification.type] || Bell
+                  const Icon = TYPE_ICONS[notification.type] || Bell
                   const colorClass =
                     TYPE_COLORS[notification.type] ||
                     "bg-gray-100 text-gray-700"
@@ -288,14 +177,8 @@ export default function NotificationBell(_props: NotificationBellProps) {
                     isPatient
                   )
 
-                  return (
-                    <div
-                      key={notification.id}
-                      className={cn(
-                        "flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors",
-                        !notification.isRead && "bg-blue-50/30"
-                      )}
-                    >
+                  const content = (
+                    <>
                       <div
                         className={cn(
                           "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
@@ -323,42 +206,38 @@ export default function NotificationBell(_props: NotificationBellProps) {
                         <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
                           {notification.message}
                         </p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-[11px] text-gray-400">
-                            {formatTimeAgo(notification.createdAt)}
-                          </span>
-                          {!notification.isRead && (
-                            <button
-                              onClick={() =>
-                                handleMarkAsRead(notification.id)
-                              }
-                              disabled={markingId === notification.id}
-                              className="text-[11px] text-primary-600 hover:text-primary-700 font-medium inline-flex items-center gap-1"
-                            >
-                              {markingId === notification.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Check className="h-3 w-3" />
-                              )}
-                              Mark read
-                            </button>
-                          )}
-                        </div>
+                        <span className="text-[11px] text-gray-400">
+                          {formatTimeAgo(notification.createdAt)}
+                        </span>
                       </div>
-                      {link && (
+                    </>
+                  )
+
+                  const rowClassName = cn(
+                    "flex items-start gap-3 px-4 py-3 w-full text-left transition-colors",
+                    link && "hover:bg-gray-50 cursor-pointer",
+                    !link && "cursor-default",
+                    !notification.isRead && "bg-blue-50/30"
+                  )
+
+                  return (
+                    <div key={notification.id} className="relative">
+                      {link ? (
                         <Link
                           href={link}
-                          onClick={() => {
-                            setIsOpen(false)
-                            if (!notification.isRead) {
-                              handleMarkAsRead(notification.id)
-                            }
-                          }}
-                          className="shrink-0 p-1 text-gray-400 hover:text-gray-600 rounded"
-                          title="Go to related page"
+                          onClick={() => handleOpenNotification(notification.id)}
+                          className={rowClassName}
+                          title={notification.title}
                         >
-                          <X className="h-3.5 w-3.5" />
+                          {content}
                         </Link>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenNotification(notification.id)}
+                          className={rowClassName}
+                        >
+                          {content}
+                        </button>
                       )}
                     </div>
                   )

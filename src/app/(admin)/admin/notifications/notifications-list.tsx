@@ -1,24 +1,13 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import Link from "next/link"
 import { Pagination } from "@/components/admin/pagination"
 import {
   Search,
   Bell,
   BellOff,
   BellRing,
-  Calendar,
-  CalendarX,
-  CalendarCheck,
-  CalendarClock,
-  CalendarPlus,
-  MessageSquare,
-  MessagesSquare,
-  UserCheck,
-  Sparkles,
-  Pencil,
-  FileText,
-  Settings,
   Trash2,
   Loader2,
   Eye,
@@ -27,6 +16,12 @@ import {
   Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  TYPE_ICONS,
+  TYPE_COLORS,
+  getNotificationLink,
+  markNotificationRead,
+} from "@/features/notifications/notification-utils"
 
 interface NotificationUser {
   id: string
@@ -53,40 +48,6 @@ interface NotificationsListProps {
   initialNotifications: Notification[]
   initialUnreadCount: number
   currentUserId: string
-}
-
-const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  APPOINTMENT_CONFIRMED: CalendarCheck,
-  APPOINTMENT_REMINDER: CalendarClock,
-  APPOINTMENT_UPDATED: Calendar,
-  APPOINTMENT_CANCELLED: CalendarX,
-  APPOINTMENT_BOOKED: CalendarPlus,
-  CONTACT_RECEIVED: MessageSquare,
-  CONTACT_ASSIGNED: UserCheck,
-  MESSAGE_RECEIVED: MessagesSquare,
-  MESSAGE_EDITED: Pencil,
-  AI_CONTENT_READY: Sparkles,
-  AI_CONTENT_APPROVED: Sparkles,
-  AI_CONTENT_REJECTED: Sparkles,
-  CONTENT_PUBLISHED: FileText,
-  SYSTEM_ALERT: Settings,
-}
-
-const TYPE_COLORS: Record<string, string> = {
-  APPOINTMENT_CONFIRMED: "bg-green-100 text-green-700",
-  APPOINTMENT_REMINDER: "bg-blue-100 text-blue-700",
-  APPOINTMENT_UPDATED: "bg-yellow-100 text-yellow-700",
-  APPOINTMENT_CANCELLED: "bg-red-100 text-red-700",
-  APPOINTMENT_BOOKED: "bg-indigo-100 text-indigo-700",
-  CONTACT_RECEIVED: "bg-purple-100 text-purple-700",
-  CONTACT_ASSIGNED: "bg-violet-100 text-violet-700",
-  MESSAGE_RECEIVED: "bg-teal-100 text-teal-700",
-  MESSAGE_EDITED: "bg-amber-100 text-amber-700",
-  AI_CONTENT_READY: "bg-indigo-100 text-indigo-700",
-  AI_CONTENT_APPROVED: "bg-green-100 text-green-700",
-  AI_CONTENT_REJECTED: "bg-red-100 text-red-700",
-  CONTENT_PUBLISHED: "bg-emerald-100 text-emerald-700",
-  SYSTEM_ALERT: "bg-orange-100 text-orange-700",
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -166,6 +127,21 @@ export default function NotificationsList({
       hour: "2-digit",
       minute: "2-digit",
     })
+  }
+
+  function handleOpen(id: string) {
+    const notification = notifications.find((n) => n.id === id)
+    if (notification && !notification.isRead) {
+      markNotificationRead("/api/admin/notifications", id)
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.id === id
+            ? { ...n, isRead: true, readAt: new Date().toISOString() }
+            : n
+        )
+      )
+      setUnreadCount((prev) => Math.max(0, prev - 1))
+    }
   }
 
   async function handleToggleRead(id: string) {
@@ -371,17 +347,12 @@ export default function NotificationsList({
               const Icon = TYPE_ICONS[notification.type] || Bell
               const colorClass =
                 TYPE_COLORS[notification.type] || "bg-gray-100 text-gray-700"
+              const link = getNotificationLink(notification.type, notification.data, false)
               const isUpdating = updatingId === notification.id
               const isDeleting = deletingId === notification.id
 
-              return (
-                <div
-                  key={notification.id}
-                  className={cn(
-                    "flex items-start gap-4 px-6 py-4 hover:bg-gray-50 transition-colors",
-                    !notification.isRead && "bg-blue-50/30"
-                  )}
-                >
+              const content = (
+                <>
                   <div
                     className={cn(
                       "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
@@ -436,6 +407,31 @@ export default function NotificationsList({
                       )}
                     </div>
                   </div>
+                </>
+              )
+
+              return (
+                <div
+                  key={notification.id}
+                  className={cn(
+                    "flex items-start gap-4 px-6 py-4 transition-colors",
+                    !notification.isRead && "bg-blue-50/30"
+                  )}
+                >
+                  {link ? (
+                    <Link
+                      href={link}
+                      onClick={() => handleOpen(notification.id)}
+                      className="flex items-start gap-4 flex-1 min-w-0 hover:bg-gray-50 rounded-lg"
+                      title={notification.title}
+                    >
+                      {content}
+                    </Link>
+                  ) : (
+                    <div className="flex items-start gap-4 flex-1 min-w-0">
+                      {content}
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-1 shrink-0">
                     <button
