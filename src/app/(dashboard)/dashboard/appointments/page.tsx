@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { Calendar, Clock, AlertCircle } from "lucide-react"
+import { useNotificationHighlight } from "@/features/notifications/notification-utils"
 
 interface Appointment {
   id: string
@@ -35,6 +36,8 @@ export default function AppointmentsPage() {
   const { data: session } = useSession()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
+
+  const { highlightedId, isHighlighted } = useNotificationHighlight(appointments.length)
 
   useEffect(() => {
     async function fetchAppointments() {
@@ -102,7 +105,10 @@ export default function AppointmentsPage() {
         {appointments.map((appt) => (
           <div
             key={appt.id}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-5"
+            id={`hl-${appt.id}`}
+            className={`bg-white rounded-xl shadow-sm border border-gray-100 p-5 transition-colors ${
+              isHighlighted(appt.id) ? "bg-primary-50 ring-1 ring-primary-300" : ""
+            }`}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">

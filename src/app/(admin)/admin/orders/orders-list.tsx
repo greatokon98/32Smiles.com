@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Eye, Search, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useNotificationHighlight } from "@/features/notifications/notification-utils"
 
 interface OrderItem {
   id: string
@@ -42,6 +43,12 @@ export function OrdersList({ orders: initialOrders }: { orders: Order[] }) {
   const [search, setSearch] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+
+  const { highlightedId, isHighlighted } = useNotificationHighlight(orders.length)
+
+  useEffect(() => {
+    if (highlightedId) setExpandedId(highlightedId)
+  }, [highlightedId])
 
   const filtered = orders.filter(
     (o) =>
@@ -88,7 +95,14 @@ export function OrdersList({ orders: initialOrders }: { orders: Order[] }) {
       ) : (
         <div className="divide-y">
           {filtered.map((order) => (
-            <div key={order.id}>
+            <div
+              key={order.id}
+              id={`hl-${order.id}`}
+              className={cn(
+                "transition-colors",
+                isHighlighted(order.id) && "bg-primary-50 ring-1 ring-primary-300"
+              )}
+            >
               <button
                 onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}
                 className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left"

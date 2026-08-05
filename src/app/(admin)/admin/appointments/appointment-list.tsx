@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Pagination } from "@/components/admin/pagination"
 import {
   Search,
@@ -14,6 +14,8 @@ import {
   Phone,
   FileText,
 } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useNotificationHighlight } from "@/features/notifications/notification-utils"
 
 type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW"
 
@@ -60,6 +62,8 @@ export default function AppointmentList({
   const [statusFilter, setStatusFilter] = useState<AppointmentStatus | "">("")
   const [page, setPage] = useState(1)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+
+  const { highlightedId, isHighlighted } = useNotificationHighlight(appointments.length)
 
   const filtered = useMemo(() => {
     let result = appointments
@@ -220,7 +224,14 @@ export default function AppointmentList({
                   const isUpdating = updatingId === appointment.id
 
                   return (
-                    <tr key={appointment.id} className="hover:bg-gray-50">
+                    <tr
+                      key={appointment.id}
+                      id={`hl-${appointment.id}`}
+                      className={cn(
+                        "hover:bg-gray-50 transition-colors",
+                        isHighlighted(appointment.id) && "bg-primary-50"
+                      )}
+                    >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 bg-primary-100 rounded-full flex items-center justify-center shrink-0">

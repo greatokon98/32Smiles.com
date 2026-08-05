@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { ShoppingBag, ChevronDown, ChevronUp } from "lucide-react"
+import { useNotificationHighlight } from "@/features/notifications/notification-utils"
 
 interface OrderItem {
   id: string
@@ -39,6 +40,12 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const { highlightedId, isHighlighted } = useNotificationHighlight(orders.length)
+
+  useEffect(() => {
+    if (highlightedId) setExpandedId(highlightedId)
+  }, [highlightedId])
 
   useEffect(() => {
     async function fetchOrders() {
@@ -101,7 +108,10 @@ export default function OrdersPage() {
           return (
             <div
               key={order.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+              id={`hl-${order.id}`}
+              className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden transition-colors ${
+                isHighlighted(order.id) ? "bg-primary-50 ring-1 ring-primary-300" : ""
+              }`}
             >
               <button
                 onClick={() => setExpandedId(isExpanded ? null : order.id)}
