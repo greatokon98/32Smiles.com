@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Eye, Search, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, formatCurrency } from "@/lib/utils"
 import { useNotificationHighlight } from "@/features/notifications/notification-utils"
 
 interface OrderItem {
@@ -11,7 +11,7 @@ interface OrderItem {
   quantity: number
   price: number
   total: number
-  product: { content: { title: string } }
+  product: { content: { title: string }; currency?: string }
 }
 
 interface Order {
@@ -113,7 +113,7 @@ export function OrdersList({ orders: initialOrders }: { orders: Order[] }) {
                     <p className="text-xs text-gray-500 mt-0.5">{order.customerName}</p>
                   </div>
                   <div className="text-right text-sm">
-                    <p className="font-medium">&#8358;{Number(order.total).toLocaleString()}</p>
+                    <p className="font-medium">{formatCurrency(Number(order.total), order.items?.[0]?.product?.currency || "NGN")}</p>
                     <p className="text-xs text-gray-500">
                       {new Date(order.createdAt).toLocaleDateString()}
                     </p>
@@ -171,15 +171,15 @@ export function OrdersList({ orders: initialOrders }: { orders: Order[] }) {
                           <tr key={item.id}>
                             <td className="px-3 py-2">{item.product.content.title}</td>
                             <td className="px-3 py-2">{item.quantity}</td>
-                            <td className="px-3 py-2">&#8358;{Number(item.price).toLocaleString()}</td>
-                            <td className="px-3 py-2 text-right">&#8358;{Number(item.total).toLocaleString()}</td>
+                            <td className="px-3 py-2">{formatCurrency(Number(item.price), item.product?.currency || "NGN")}</td>
+                            <td className="px-3 py-2 text-right">{formatCurrency(Number(item.total), item.product?.currency || "NGN")}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
                         <tr className="font-bold bg-gray-50">
                           <td colSpan={3} className="px-3 py-2 text-right">Total:</td>
-                          <td className="px-3 py-2 text-right">&#8358;{Number(order.total).toLocaleString()}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrency(Number(order.total), order.items?.[0]?.product?.currency || "NGN")}</td>
                         </tr>
                       </tfoot>
                     </table>

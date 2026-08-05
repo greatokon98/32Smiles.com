@@ -52,11 +52,24 @@ export default async function GalleryPage() {
     orderBy: [{ sortOrder: "asc" }, { content: { createdAt: "desc" } }],
   })
 
-  const hasImages = dbItems.some((item) => item.imageFile?.url)
+  const fallbackAsItems = fallbackGalleryItems.map((item, index) => ({
+    id: `fallback-${item.id}`,
+    category: item.category,
+    sortOrder: 1000 + index,
+    caption: item.title,
+    altText: item.title,
+    content: { title: item.title },
+    imageFile: { url: item.imageUrl },
+    fullImageFile: { url: item.fullImageUrl },
+  }))
 
-  const categories: string[] = hasImages
-    ? Array.from(new Set(dbItems.map((item) => item.category).filter((c): c is string => !!c))).sort()
-    : Array.from(new Set(fallbackGalleryItems.map((item) => item.category).filter((c): c is string => !!c))).sort()
+  const visibleDbItems = dbItems.filter((item) => item.imageFile?.url || item.fullImageFile?.url)
+
+  const displayItems = [...visibleDbItems, ...fallbackAsItems]
+
+  const categories: string[] = Array.from(
+    new Set(displayItems.map((item) => item.category).filter((c): c is string => !!c))
+  ).sort()
 
   return (
     <>
@@ -79,11 +92,7 @@ export default async function GalleryPage() {
 
       <section className="py-16 lg:py-24 bg-gray-50">
         <div className="container mx-auto px-4">
-          {hasImages ? (
-            <GalleryGrid items={serializeContent(dbItems) as any} categories={categories} />
-          ) : (
-            <GalleryGrid fallbackItems={fallbackGalleryItems} categories={categories} />
-          )}
+          <GalleryGrid items={serializeContent(displayItems) as any} categories={categories} />
         </div>
       </section>
     </>

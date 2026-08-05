@@ -2,7 +2,6 @@ import { Metadata } from "next"
 import { siteConfig } from "@/config/site"
 import { CartPageContent } from "./cart-page-content"
 import prisma from "@/lib/prisma"
-import { auth } from "@/lib/auth"
 
 function getSetting(settings: { key: string; value: string }[], key: string, fallback: string): string {
   return settings.find((s) => s.key === key)?.value || fallback
@@ -15,23 +14,6 @@ export const metadata: Metadata = {
 
 export default async function CartPage() {
   const settings = await prisma.setting.findMany()
-  const session = await auth()
-
-  let initialUser: { name: string; email: string; phone: string; address: string } | null = null
-  if (session?.user?.email) {
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { name: true, email: true, phone: true, address: true },
-    })
-    if (user?.name && user?.email) {
-      initialUser = {
-        name: user.name,
-        email: user.email,
-        phone: user.phone || "",
-        address: user.address || "",
-      }
-    }
-  }
 
   return (
     <>
@@ -46,7 +28,7 @@ export default async function CartPage() {
           </div>
         </div>
       </section>
-      <CartPageContent initialUser={initialUser} />
+      <CartPageContent />
     </>
   )
 }

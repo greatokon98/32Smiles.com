@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import prisma from "@/lib/prisma"
+import { formatCurrency } from "@/lib/utils"
 import {
   Calendar,
   ShoppingBag,
@@ -58,6 +59,10 @@ export default async function DashboardOverview() {
           status: true,
           total: true,
           createdAt: true,
+          items: {
+            take: 1,
+            select: { product: { select: { currency: true } } },
+          },
         },
       }),
       prisma.appointment.findMany({
@@ -279,7 +284,7 @@ export default async function DashboardOverview() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-gray-900">
-                      ₦{Number(order.total).toLocaleString()}
+                      {formatCurrency(Number(order.total), order.items?.[0]?.product?.currency || "NGN")}
                     </span>
                     <span
                       className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${

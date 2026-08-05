@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
           include: {
             product: {
               select: {
+                currency: true,
                 content: { select: { title: true } },
               },
             },
@@ -55,6 +56,7 @@ export async function GET(request: NextRequest) {
         ...item,
         price: Number(item.price),
         total: Number(item.total),
+        currency: item.product?.currency || "NGN",
       })),
     }))
 
@@ -91,8 +93,21 @@ export async function POST(request: NextRequest) {
     const productIds = items.map((i: { productId: string }) => i.productId)
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
-      select: { id: true, price: true, content: { select: { title: true } } },
+      select: { id: true, price: true, currency: true, content: { select: { title: true } } },
     })
+
+    const foundIds = new Set(products.map((p) => p.id))
+    const staleProductIds = [...new Set(productIds.filter((id: string) => !foundIds.has(id)))]
+    if (staleProductIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Some items in your cart are no longer available and were removed.",
+          code: "STALE_ITEMS",
+          staleProductIds,
+        },
+        { status: 409 }
+      )
+    }
 
     const priceMap = new Map(products.map((p) => [p.id, Number(p.price)]))
 
@@ -172,6 +187,18 @@ export async function POST(request: NextRequest) {
         },
       })
       accountCreated = true
+    } else if (sessionEmail && sessionEmail === customerEmail.toLowerCase()) {
+      try {
+        await prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            ...(customerPhone ? { phone: customerPhone } : {}),
+            ...(deliveryAddress ? { address: deliveryAddress } : {}),
+          },
+        })
+      } catch (profileError) {
+        console.error("[API] Failed to persist checkout fields to profile:", profileError)
+      }
     }
 
     try {
@@ -179,6 +206,7 @@ export async function POST(request: NextRequest) {
         customerName,
         customerEmail,
         orderNumber,
+        currency: products.find((p) => p.id === order.items[0]?.productId)?.currency || "NGN",
         items: order.items.map((item) => {
           const product = products.find((p) => p.id === item.productId)
           return {

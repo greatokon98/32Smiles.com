@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { CheckCircle, Home, ShoppingBag } from "lucide-react"
+import { formatCurrency } from "@/lib/utils"
 
 type OrderItem = {
   id: string
@@ -10,6 +11,7 @@ type OrderItem = {
   total: string | number
   product: {
     id: string
+    currency?: string
     content: { title: string }
   }
 }
@@ -31,6 +33,7 @@ type Order = {
 
 export function ConfirmationReceipt({ order }: { order: Order }) {
   const total = Number(order.total)
+  const currency = order.items[0]?.product?.currency || "NGN"
 
   const statusLabel: Record<string, string> = {
     PENDING: "Pending",
@@ -72,16 +75,16 @@ export function ConfirmationReceipt({ order }: { order: Order }) {
                 <div key={item.id} className="flex justify-between py-3">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{item.product.content.title}</p>
-                    <p className="text-xs text-gray-500">Qty: {item.quantity} &times; &#8358;{Number(item.price).toLocaleString()}</p>
+                    <p className="text-xs text-gray-500">Qty: {item.quantity} &times; {formatCurrency(Number(item.price), item.product?.currency || "NGN")}</p>
                   </div>
-                  <p className="text-sm font-bold text-gray-900">&#8358;{Number(item.total).toLocaleString()}</p>
+                  <p className="text-sm font-bold text-gray-900">{formatCurrency(Number(item.total), item.product?.currency || "NGN")}</p>
                 </div>
               ))}
             </div>
             <div className="border-t border-gray-200 pt-3 mt-1 space-y-1">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Subtotal</span>
-                <span className="font-medium">&#8358;{Number(order.subtotal).toLocaleString()}</span>
+                <span className="font-medium">{formatCurrency(Number(order.subtotal), currency)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Delivery</span>
@@ -89,7 +92,7 @@ export function ConfirmationReceipt({ order }: { order: Order }) {
               </div>
               <div className="flex justify-between text-base border-t pt-2">
                 <span className="font-bold text-gray-900">Total</span>
-                <span className="font-bold text-primary-600">&#8358;{total.toLocaleString()}</span>
+                <span className="font-bold text-primary-600">{formatCurrency(total, currency)}</span>
               </div>
             </div>
           </div>

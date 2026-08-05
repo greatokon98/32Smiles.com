@@ -149,15 +149,15 @@ export function ProductDetail({ product }: { product: ProductItem }) {
               {salePrice != null ? (
                 <>
                   <span className="text-3xl font-bold text-primary-600">
-                    {formatCurrency(salePrice)}
+                    {formatCurrency(salePrice, product.currency)}
                   </span>
                   <span className="text-xl text-gray-400 line-through">
-                    {formatCurrency(price)}
+                    {formatCurrency(price, product.currency)}
                   </span>
                 </>
               ) : (
                 <span className="text-3xl font-bold text-primary-600">
-                  {formatCurrency(price)}
+                  {formatCurrency(price, product.currency)}
                 </span>
               )}
               <span className="text-sm text-gray-400 ml-1">
@@ -173,6 +173,7 @@ export function ProductDetail({ product }: { product: ProductItem }) {
                   title={product.content.title}
                   price={price}
                   imageUrl={imageUrl || undefined}
+                  currency={product.currency}
                 />
               </div>
             )}

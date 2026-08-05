@@ -4,12 +4,14 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { ShoppingBag, ChevronDown, ChevronUp } from "lucide-react"
 import { useNotificationHighlight } from "@/features/notifications/notification-utils"
+import { formatCurrency } from "@/lib/utils"
 
 interface OrderItem {
   id: string
   quantity: number
   price: number
   total: number
+  currency?: string
   product: {
     content: {
       title: string
@@ -134,7 +136,7 @@ export default function OrdersPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold text-gray-900">
-                    ${Number(order.total).toFixed(2)}
+                    {formatCurrency(Number(order.total), order.items?.[0]?.currency || "NGN")}
                   </span>
                   <span
                     className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${
@@ -170,10 +172,10 @@ export default function OrdersPage() {
                           </td>
                           <td className="py-1.5">{item.quantity}</td>
                           <td className="py-1.5 text-right">
-                            ${Number(item.price).toFixed(2)}
+                            {formatCurrency(Number(item.price), item.currency || "NGN")}
                           </td>
                           <td className="py-1.5 text-right font-medium">
-                            ${Number(item.total).toFixed(2)}
+                            {formatCurrency(Number(item.total), item.currency || "NGN")}
                           </td>
                         </tr>
                       ))}
@@ -184,7 +186,7 @@ export default function OrdersPage() {
                           Subtotal
                         </td>
                         <td className="pt-2 text-right font-medium">
-                          ${Number(order.subtotal).toFixed(2)}
+                          {formatCurrency(Number(order.subtotal), order.items?.[0]?.currency || "NGN")}
                         </td>
                       </tr>
                       <tr>
@@ -192,7 +194,7 @@ export default function OrdersPage() {
                           Total
                         </td>
                         <td className="pt-1 text-right font-bold text-gray-900">
-                          ${Number(order.total).toFixed(2)}
+                          {formatCurrency(Number(order.total), order.items?.[0]?.currency || "NGN")}
                         </td>
                       </tr>
                     </tfoot>
