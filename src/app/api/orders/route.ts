@@ -144,6 +144,36 @@ export async function POST(request: NextRequest) {
 
     let accountCreated = false
     let tempPassword: string | undefined
+
+    try {
+      const staff = await prisma.user.findMany({
+        where: {
+          role: { in: ["RECEPTIONIST", "ADMIN", "SUPER_ADMIN"] },
+          isActive: true,
+          deletedAt: null,
+        },
+        select: { id: true },
+      })
+      if (staff.length > 0) {
+        await prisma.notification.createMany({
+          data: staff.map((s) => ({
+            userId: s.id,
+            type: "SYSTEM_ALERT",
+            channel: "IN_APP",
+            title: "New Order Placed",
+            message: `${customerName} placed order ${orderNumber}.`,
+            data: {
+              orderId: order.id,
+              orderNumber,
+              status: "PENDING",
+            },
+          })),
+        })
+      }
+    } catch (notifyError) {
+      console.error("[API] Failed to notify staff of new order:", notifyError)
+    }
+
     if (!existingUser) {
       tempPassword = generateTempPassword()
       const passwordHash = await bcrypt.hash(tempPassword, 12)

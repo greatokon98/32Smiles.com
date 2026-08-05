@@ -316,7 +316,7 @@ export function CheckoutForm({ initialUser = null }: { initialUser?: CheckoutUse
                         This email is already registered. Please log in to continue.
                       </p>
                       <Link
-                        href="/admin/login"
+                        href="/admin/login?callbackUrl=/checkout"
                         className="inline-flex items-center gap-1 text-amber-700 text-sm font-semibold hover:text-amber-800"
                       >
                         Go to Login <span aria-hidden="true">&rarr;</span>

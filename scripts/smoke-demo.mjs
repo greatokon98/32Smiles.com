@@ -7,6 +7,17 @@
 
 import { chromium } from "playwright"
 import { execSync } from "node:child_process"
+import { readFileSync } from "node:fs"
+
+const DEV_LOG = "/tmp/smiles-dev.log"
+
+function logTail() {
+  try {
+    return readFileSync(DEV_LOG, "utf8")
+  } catch {
+    return ""
+  }
+}
 
 const BASE = process.env.BASE_URL || "http://localhost:3000"
 const accounts = {
@@ -58,7 +69,7 @@ async function clearGlobalErrors() {
 }
 
 async function goto(url, opts = {}) {
-  const res = await page.goto(BASE + url, { waitUntil: "load", timeout: 30000, ...opts })
+  const res = await page.goto(BASE + url, { waitUntil: "domcontentloaded", timeout: 30000, ...opts })
   await page.waitForTimeout(400)
   return res
 }
@@ -114,6 +125,67 @@ for (const route of publicRoutes) {
   const html = await page.content()
   const hasINR = /₹/.test(html) && !/₦/.test(html)
   report("Public", "products page shows ₹ (INR)", hasINR, hasINR ? "" : "missing ₹ / found ₦")
+}
+
+// ────────────────────────── 1.5 LOGIN REDIRECT (#1 / #3) ──────────────
+console.log("\n== Login redirect (callbackUrl) ==")
+{
+  // unauthenticated /dashboard/orders → 307 to login carrying callbackUrl
+  const probeCtx = await browser.newContext()
+  const probeReq = await probeCtx.request.get(BASE + "/dashboard/orders", { maxRedirects: 0 })
+  const probeLocation = probeReq.headers()["location"] || ""
+  report(
+    "Login",
+    "unauth /dashboard/orders 307 → /admin/login?callbackUrl",
+    probeReq.status() === 307 && /admin\/login\?callbackUrl=%2Fdashboard%2Forders/.test(probeLocation),
+    `status ${probeReq.status()} ${probeLocation}`
+  )
+  await probeCtx.close()
+
+  const ctx2 = await browser.newContext()
+  const p2 = await ctx2.newPage()
+  p2.setDefaultTimeout(15000)
+
+  // VIEWER login with safe callbackUrl=/checkout → lands back on /checkout
+  await p2.goto(BASE + "/admin/login?callbackUrl=/checkout", { waitUntil: "domcontentloaded", timeout: 30000 })
+  await p2.fill("#email", accounts.patient[0])
+  await p2.fill("#password", accounts.patient[1])
+  await Promise.all([
+    p2.waitForURL((u) => u.pathname === "/checkout", { timeout: 20000 }),
+    p2.click('button[type="submit"]'),
+  ])
+  await p2.waitForTimeout(400)
+  report("Login", "VIEWER login with callbackUrl=/checkout lands on /checkout", p2.url().endsWith("/checkout"), p2.url())
+
+  // VIEWER login with unsafe callbackUrl=/admin/dashboard → blocked to /dashboard
+  await p2.goto(BASE + "/admin/login?callbackUrl=/admin/dashboard", { waitUntil: "domcontentloaded", timeout: 30000 })
+  await p2.fill("#email", accounts.patient[0])
+  await p2.fill("#password", accounts.patient[1])
+  await Promise.all([
+    p2.waitForURL((u) => u.pathname === "/dashboard", { timeout: 20000 }),
+    p2.click('button[type="submit"]'),
+  ])
+  await p2.waitForTimeout(400)
+  const blocked = p2.url().endsWith("/dashboard") && !p2.url().includes("/admin/")
+  report("Login", "VIEWER unsafe admin callbackUrl blocked → /dashboard", blocked, p2.url())
+
+  // VIEWER login with callbackUrl=/dashboard/orders → lands on orders (no orders yet → empty state, no logout)
+  await p2.goto(BASE + "/admin/login?callbackUrl=/dashboard/orders", { waitUntil: "domcontentloaded", timeout: 30000 })
+  await p2.fill("#email", accounts.patient[0])
+  await p2.fill("#password", accounts.patient[1])
+  await Promise.all([
+    p2.waitForURL((u) => u.pathname === "/dashboard/orders", { timeout: 20000 }),
+    p2.click('button[type="submit"]'),
+  ])
+  await p2.waitForTimeout(800)
+  const emptyState = await p2.getByText("No orders yet").isVisible().catch(() => false)
+  report(
+    "Login",
+    "VIEWER lands on /dashboard/orders with empty state (no logout)",
+    p2.url().endsWith("/dashboard/orders") && emptyState,
+    p2.url()
+  )
+  await ctx2.close()
 }
 
 // ────────────────────────── 2. SHOP E2E ───────────────────────────────
@@ -436,6 +508,80 @@ for (const route of patientRoutes) {
   report("Patient", "seeded appointment visible in patient portal", appt && confirmed)
 }
 
+// ────────────────────────── 9.5 EMAIL + NOTIFICATIONS (#2) ─────────────
+console.log("\n== Emails + notifications (#2) ==")
+let apptId = ""
+{
+  await login(...accounts.patient)
+
+  // book an appointment as an EXISTING user → confirmation email must be emitted
+  const tomorrow = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    while (d.getDay() === 6) d.setDate(d.getDate() + 1)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const dd = String(d.getDate()).padStart(2, "0")
+    return `${y}-${m}-${dd}`
+  })()
+  const logBefore = logTail().length
+  const booking = await page.evaluate(
+    async ({ email, phone, date }) => {
+      const r = await fetch("/api/appointments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientName: "Patient Demo",
+          patientEmail: email,
+          patientPhone: phone,
+          appointmentDate: date,
+          appointmentTime: "9:00 AM",
+          serviceType: "Teeth Cleaning",
+          notes: "smoke test",
+        }),
+      })
+      return { status: r.status, body: await r.json() }
+    },
+    { email: accounts.patient[0], phone: "+919845001122", date: tomorrow }
+  )
+  report("Email", "existing-user appointment booking returns 201", booking.status === 201, `status ${booking.status} ${booking.body?.error || ""}`)
+  report("Email", "existing-user booking reports accountCreated=false", booking.body?.accountCreated === false, `accountCreated=${booking.body?.accountCreated}`)
+  apptId = booking.body?.appointment?.id || ""
+  if (apptId) {
+    const freshLog = logTail().slice(logBefore)
+    const confirmLogged = freshLog.includes("Appointment Confirmed") && freshLog.includes(accounts.patient[0])
+    report("Email", "confirmation email emitted for EXISTING user (dev log)", confirmLogged, confirmLogged ? "" : "no 'Appointment Confirmed' line in dev log")
+    const staffNotifs = Number(psql(`SELECT COUNT(*) FROM notifications WHERE type = 'APPOINTMENT_BOOKED' AND data->>'appointmentId' = '${apptId}'`))
+    report("Email", "staff notified on booking (SUPER_ADMIN+ADMIN+RECEPTIONIST)", staffNotifs === 3, `count=${staffNotifs}`)
+  }
+
+  // reminder cron: first run sends, second run dedupes
+  if (apptId) {
+    const r1 = await page.evaluate(() => fetch("/api/cron/appointment-reminders").then((r) => r.json()))
+    report("Email", "reminder cron first run sends reminders", r1.reminded >= 1, `reminded=${r1.reminded} skipped=${r1.skipped}`)
+    const r2 = await page.evaluate(() => fetch("/api/cron/appointment-reminders").then((r) => r.json()))
+    report("Email", "reminder cron second run dedupes (0 new)", r2.reminded === 0, `reminded=${r2.reminded}`)
+    const reminderNotifs = Number(psql(`SELECT COUNT(*) FROM notifications WHERE type = 'APPOINTMENT_REMINDER' AND data->>'appointmentId' = '${apptId}'`))
+    report("Email", "in-app reminder notification created for patient", reminderNotifs === 1, `count=${reminderNotifs}`)
+  }
+
+  // order placed → staff notifications (assert on the patient order from section 3)
+  if (patientOrderNumber) {
+    const staffNotifs = Number(psql(`SELECT COUNT(*) FROM notifications WHERE type = 'SYSTEM_ALERT' AND data->>'orderNumber' = '${patientOrderNumber}'`))
+    report("Email", "staff notified on order placed (SUPER_ADMIN+ADMIN+RECEPTIONIST)", staffNotifs === 3, `count=${staffNotifs}`)
+  }
+
+  // cleanup test artifacts
+  if (apptId) {
+    psql(`DELETE FROM notifications WHERE data->>'appointmentId' = '${apptId}'`)
+    psql(`DELETE FROM appointments WHERE id = '${apptId}'`)
+  }
+  const patId = psql(`SELECT id FROM users WHERE email = '${accounts.patient[0]}'`)
+  if (patId) {
+    psql(`DELETE FROM notifications WHERE "userId" = '${patId}' AND type = 'APPOINTMENT_REMINDER'`)
+  }
+}
+
 // ────────────────────────── 10. CHANGE PASSWORD ────────────────────────
 console.log("\n== Change password + re-login ==")
 {
@@ -480,17 +626,11 @@ console.log("\n== No-leaks / cleanup ==")
   report("Leaks", "no products with missing category", orphanProducts === 0, `found ${orphanProducts}`)
 
   // cleanup test artifacts
-  if (guestOrderNumber) {
-    psql(`DELETE FROM orders WHERE "orderNumber" = '${guestOrderNumber}'`)
-  }
-  if (patientOrderNumber) {
-    psql(`DELETE FROM orders WHERE "orderNumber" = '${patientOrderNumber}'`)
-  }
-  if (superadminOrderNumber) {
-    psql(`DELETE FROM orders WHERE "orderNumber" = '${superadminOrderNumber}'`)
-  }
-  if (inlineOrderNumber) {
-    psql(`DELETE FROM orders WHERE "orderNumber" = '${inlineOrderNumber}'`)
+  for (const num of [guestOrderNumber, patientOrderNumber, superadminOrderNumber, inlineOrderNumber]) {
+    if (num) {
+      psql(`DELETE FROM notifications WHERE data->>'orderNumber' = '${num}'`)
+      psql(`DELETE FROM orders WHERE "orderNumber" = '${num}'`)
+    }
   }
   const guestId = psql(`SELECT id FROM users WHERE email = '${guestEmail}'`)
   if (guestId) {

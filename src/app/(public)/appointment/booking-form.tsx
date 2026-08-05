@@ -164,7 +164,7 @@ export default function BookingForm({
         setError(
           <>
             This email is already registered. Please log in to manage your appointments.
-            {" "}<a href="/admin/login" className="font-semibold underline">Go to Login →</a>
+            {" "}<a href="/admin/login?callbackUrl=/appointment" className="font-semibold underline">Go to Login →</a>
           </>
         )
         setStatus("error")
