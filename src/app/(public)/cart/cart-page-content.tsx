@@ -5,6 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { ShoppingCart, Trash2, Minus, Plus, ArrowLeft, Loader2, CheckCircle } from "lucide-react"
 import { useCart } from "@/features/cart/cart-context"
+import { formatCurrency } from "@/lib/utils"
 
 export function CartPageContent({
   initialUser = null,
@@ -133,7 +134,7 @@ export function CartPageContent({
                           {item.title}
                         </Link>
                         <p className="text-sm font-bold text-primary-600 mt-1">
-                          &#8358;{item.price.toLocaleString()}
+                          {formatCurrency(item.price, item.currency)}
                         </p>
                         <div className="flex items-center gap-2 mt-2">
                           <button
@@ -159,7 +160,7 @@ export function CartPageContent({
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-bold text-gray-900">
-                          &#8358;{(item.price * item.quantity).toLocaleString()}
+                          {formatCurrency(item.price * item.quantity, item.currency)}
                         </p>
                       </div>
                     </div>
@@ -174,7 +175,7 @@ export function CartPageContent({
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-500">Subtotal</span>
-                    <span className="font-medium">&#8358;{subtotal.toLocaleString()}</span>
+                    <span className="font-medium">{formatCurrency(subtotal, items[0]?.currency || "NGN")}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Delivery</span>
@@ -182,7 +183,7 @@ export function CartPageContent({
                   </div>
                   <div className="border-t pt-2 flex justify-between text-base">
                     <span className="font-bold text-gray-900">Total</span>
-                    <span className="font-bold text-primary-600">&#8358;{subtotal.toLocaleString()}</span>
+                    <span className="font-bold text-primary-600">{formatCurrency(subtotal, items[0]?.currency || "NGN")}</span>
                   </div>
                 </div>
               </div>

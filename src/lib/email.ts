@@ -1,5 +1,6 @@
 import { Resend } from "resend"
 import nodemailer from "nodemailer"
+import { formatCurrency } from "@/lib/utils"
 
 let resendInstance: Resend | null = null
 let transporterInstance: nodemailer.Transporter | null = null
@@ -448,19 +449,21 @@ interface OrderConfirmationDetails {
   items: { title: string; quantity: number; price: number }[]
   total: number
   deliveryAddress: string
+  currency?: string
   tempPassword?: string
 }
 
 export async function sendOrderConfirmation(
   order: OrderConfirmationDetails
 ): Promise<EmailResult> {
+  const currency = order.currency || "NGN"
   const itemsHtml = order.items
     .map(
       (item) => `
     <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:14px;">${item.title}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:14px;text-align:center;">${item.quantity}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:14px;text-align:right;">₦${item.price.toLocaleString()}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:14px;text-align:right;">${formatCurrency(item.price, currency)}</td>
     </tr>`
     )
     .join("")
@@ -486,7 +489,7 @@ export async function sendOrderConfirmation(
       <tfoot>
         <tr>
           <td colspan="2" style="padding:10px 12px;border-top:2px solid #e5e7eb;color:#374151;font-size:14px;font-weight:600;text-align:right;">Total</td>
-          <td style="padding:10px 12px;border-top:2px solid #e5e7eb;color:#0891b2;font-size:16px;font-weight:700;text-align:right;">₦${order.total.toLocaleString()}</td>
+          <td style="padding:10px 12px;border-top:2px solid #e5e7eb;color:#0891b2;font-size:16px;font-weight:700;text-align:right;">${formatCurrency(order.total, currency)}</td>
         </tr>
       </tfoot>
     </table>

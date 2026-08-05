@@ -9,25 +9,27 @@ async function main() {
 
   // ── 1. Demo accounts ───────────────────────────────────────────────
   // Static passwords because demo emails are .local (no delivery possible).
-  const accounts: { email: string; password: string; name: string; role: string }[] = [
+  const accounts: { email: string; password: string; name: string; role: string; phone?: string; address?: string }[] = [
     { email: "superadmin@demo.local", password: "Superadmin123!", name: "Super Admin", role: "SUPER_ADMIN" },
     { email: "admin@demo.local", password: "Admin123!", name: "Clinic Admin", role: "ADMIN" },
     { email: "editor@demo.local", password: "Editor123!", name: "Content Editor", role: "EDITOR" },
     { email: "receptionist@demo.local", password: "Receptionist123!", name: "Receptionist", role: "RECEPTIONIST" },
-    { email: "patient@demo.local", password: "Patient123!", name: "Demo Patient", role: "VIEWER" },
+    { email: "patient@demo.local", password: "Patient123!", name: "Demo Patient", role: "VIEWER", phone: "+919845001122", address: "24, 27th Main Road, HSR Layout, Bengaluru 560102" },
   ]
 
   for (const account of accounts) {
     const passwordHash = await bcrypt.hash(account.password, 12)
     const user = await prisma.user.upsert({
       where: { email: account.email },
-      update: { passwordHash, role: account.role, name: account.name, isActive: true },
+      update: { passwordHash, role: account.role, name: account.name, isActive: true, phone: account.phone, address: account.address },
       create: {
         email: account.email,
         name: account.name,
         passwordHash,
         role: account.role,
         isActive: true,
+        phone: account.phone,
+        address: account.address,
       },
     })
     console.log("✅ Account ready:", user.email, `(${account.role})`)
@@ -474,7 +476,82 @@ async function main() {
   }
   console.log("✅ Created FAQs:", faqs.length)
 
-  // ── 9. Image settings (existing local fallbacks; per-slug service map) ──
+  // ── 9. Product categories + products (INR shop) ────────────────────
+  const productCategories = [
+    { name: "Toothpaste", slug: "toothpaste", description: "Fluoride and whitening toothpastes for daily protection.", sortOrder: 1 },
+    { name: "Toothbrush", slug: "brushes", description: "Manual and electric brushes for a thorough clean.", sortOrder: 2 },
+    { name: "Mouthwash", slug: "mouthwash", description: "Rinses for fresh breath and extra cavity protection.", sortOrder: 3 },
+    { name: "Kids Oral Care", slug: "kids", description: "Gentle, age-appropriate oral care for children.", sortOrder: 4 },
+    { name: "Oral Accessories", slug: "accessories", description: "Floss, interdental brushes and daily essentials.", sortOrder: 5 },
+  ]
+
+  for (const cat of productCategories) {
+    await prisma.productCategory.upsert({
+      where: { slug: cat.slug },
+      update: {},
+      create: cat,
+    })
+  }
+  console.log("✅ Created Product Categories:", productCategories.length)
+
+  const products = [
+    { title: "Fluoride Toothpaste 100g", slug: "fluoride-toothpaste-100g", category: "toothpaste", price: 120, brand: "Colgate", rating: 4.6, reviewCount: 184, featured: true, hot: false, sale: false, desc: "Daily fluoride toothpaste that fights cavities, strengthens enamel and protects against plaque." },
+    { title: "Whitening Toothpaste 100g", slug: "whitening-toothpaste-100g", category: "toothpaste", price: 210, brand: "Sensodyne", rating: 4.5, reviewCount: 96, featured: false, hot: false, sale: true, desc: "Gentle whitening paste that lifts surface stains while protecting sensitive teeth." },
+    { title: "Kids Toothpaste 50g", slug: "kids-toothpaste-50g", category: "kids", price: 90, brand: "Colgate", rating: 4.7, reviewCount: 73, featured: false, hot: false, sale: false, desc: "Low-fluoride, mild-tasting toothpaste made for children's developing teeth." },
+    { title: "Soft-Bristled Toothbrush", slug: "soft-bristled-toothbrush", category: "brushes", price: 80, brand: "Oral-B", rating: 4.4, reviewCount: 210, featured: true, hot: false, sale: false, desc: "Soft, end-rounded bristles that clean gently without damaging gums." },
+    { title: "Sonic Electric Toothbrush", slug: "sonic-electric-toothbrush", category: "brushes", price: 2499, brand: "Philips", rating: 4.8, reviewCount: 64, featured: true, hot: true, sale: false, desc: "Sonic cleaning with a smart timer and pressure sensor for a dentist-grade clean." },
+    { title: "Kids Cartoon Toothbrush", slug: "kids-cartoon-toothbrush", category: "kids", price: 120, brand: "Oral-B", rating: 4.6, reviewCount: 58, featured: false, hot: false, sale: false, desc: "Small-headed brush with fun characters that makes brushing a habit kids enjoy." },
+    { title: "Alcohol-Free Mouthwash 250ml", slug: "alcohol-free-mouthwash-250ml", category: "mouthwash", price: 240, brand: "Listerine", rating: 4.5, reviewCount: 132, featured: true, hot: false, sale: false, desc: "Alcohol-free rinse that kills odour-causing bacteria without the burn." },
+    { title: "Herbal Mouthwash 250ml", slug: "herbal-mouthwash-250ml", category: "mouthwash", price: 150, brand: "Dabur", rating: 4.3, reviewCount: 88, featured: false, hot: false, sale: true, desc: "Ayurvedic herbal rinse for fresh breath and healthy gums, suitable for daily use." },
+    { title: "Dental Floss 50m", slug: "dental-floss-50m", category: "accessories", price: 180, brand: "Oral-B", rating: 4.4, reviewCount: 145, featured: false, hot: false, sale: false, desc: "Waxed, shred-resistant floss that reaches the spaces a brush cannot." },
+    { title: "Interdental Brushes (Pack of 10)", slug: "interdental-brushes-pack-10", category: "accessories", price: 320, brand: "TePe", rating: 4.7, reviewCount: 41, featured: false, hot: false, sale: false, desc: "Fine brushes for cleaning between teeth and around crowns and braces." },
+    { title: "Tongue Cleaner", slug: "tongue-cleaner", category: "accessories", price: 60, brand: "DentaCare", rating: 4.2, reviewCount: 167, featured: false, hot: false, sale: false, desc: "Stainless steel tongue cleaner to remove bacteria and freshen breath." },
+  ]
+
+  const categoryMap: Record<string, string> = {
+    toothpaste: "toothpaste",
+    brushes: "brushes",
+    mouthwash: "mouthwash",
+    kids: "kids",
+    accessories: "accessories",
+  }
+
+  for (const product of products) {
+    const catSlug = categoryMap[product.category]
+    const cat = await prisma.productCategory.findUnique({ where: { slug: catSlug } })
+    if (!cat) throw new Error(`Category "${catSlug}" not found for product "${product.title}"`)
+    await prisma.content.upsert({
+      where: { type_slug: { type: ContentType.PRODUCT, slug: product.slug } },
+      update: { title: product.title, excerpt: product.desc, body: product.desc, status: ContentStatus.PUBLISHED, publishedAt: new Date() },
+      create: {
+        type: ContentType.PRODUCT,
+        slug: product.slug,
+        title: product.title,
+        excerpt: product.desc,
+        body: product.desc,
+        status: ContentStatus.PUBLISHED,
+        authorId: superAdmin.id,
+        publishedAt: new Date(),
+        product: {
+          create: {
+            price: product.price,
+            currency: "INR",
+            productCategoryId: cat.id,
+            rating: product.rating,
+            reviewCount: product.reviewCount,
+            brand: product.brand,
+            inStock: true,
+            isFeatured: product.featured,
+            isHot: product.hot,
+            isOnSale: product.sale,
+          },
+        },
+      },
+    })
+  }
+  console.log("✅ Created Products:", products.length)
+
+  // ── 10. Image settings (existing local fallbacks; per-slug service map) ──
   const serviceImageMap: Record<string, string> = {
     "invisalign-clear-aligners": "/images/services/2.jpg",
     "root-canal-treatment": "/images/services/1.jpg",
@@ -515,6 +592,19 @@ async function main() {
     { key: "testimonial_avatar_3", value: "/images/testimonials/3.png", group: "images", label: "Testimonial - Avatar 3" },
     { key: "testimonial_avatar_4", value: "/images/testimonials/1.jpg", group: "images", label: "Testimonial - Avatar 4" },
     { key: "service_fallback_images", value: JSON.stringify(serviceImageMap), group: "images", label: "Service Fallback Images" },
+    { key: "product_fallback_images", value: JSON.stringify({
+      "fluoride-toothpaste-100g": "/images/Products/Toothepaste/paste1.jpg",
+      "whitening-toothpaste-100g": "/images/Products/Toothepaste/paste2.jpg",
+      "kids-toothpaste-50g": "/images/Products/Toothepaste/kidpaste.jpg",
+      "soft-bristled-toothbrush": "/images/Products/Brushes/oralb.jpg",
+      "sonic-electric-toothbrush": "/images/Products/Brushes/elect.png",
+      "kids-cartoon-toothbrush": "/images/Products/Kids_products/oralkids.png",
+      "alcohol-free-mouthwash-250ml": "/images/Products/General_Product/general1.jpg",
+      "herbal-mouthwash-250ml": "/images/Products/General_Product/oral.png",
+      "dental-floss-50m": "/images/Products/General_Product/80294412.jpg",
+      "interdental-brushes-pack-10": "/images/Products/Brushes/bru.jpg",
+      "tongue-cleaner": "/images/Products/General_Product/00889714001875_c1n1.jpeg",
+    }), group: "images", label: "Product Fallback Images" },
     { key: "team_fallback_photos", value: JSON.stringify([
       { id: "f1", name: "Dr. Naveenn Indla", photoUrl: "/images/team/1.jpg" },
       { id: "f2", name: "Dr. S. Preethi Naidu", photoUrl: "/images/team/2.jpg" },
@@ -546,7 +636,7 @@ async function main() {
   }
   console.log("✅ Created Image Settings:", imageSettings.length)
 
-  // ── 10. Default brand voice + prompt templates + AI providers ───────
+  // ── 11. Default brand voice + prompt templates + AI providers ───────
   await prisma.brandVoice.upsert({
     where: { name: "Professional & Warm" },
     update: {},
@@ -631,7 +721,29 @@ async function main() {
   }
   console.log("✅ Created AI Provider Configs:", providers.length)
 
-  // ── 11. Pre-booked appointment (demo patient) ───────────────────────
+  // ── 12. AI Studio demo draft (no provider key required) ────────────
+  const demoDraft = await prisma.aIDraft.findFirst({
+    where: { title: "AI Draft: 5 Everyday Habits for a Healthier Smile" },
+    select: { id: true },
+  })
+  if (!demoDraft) {
+    await prisma.aIDraft.create({
+      data: {
+        title: "AI Draft: 5 Everyday Habits for a Healthier Smile",
+        body: `<p>Good oral health comes down to a few simple habits done consistently. Here are five that make the biggest difference.</p><h3>1. Brush Twice a Day for Two Minutes</h3><p>Use a soft-bristled brush with fluoride toothpaste and reach every surface of every tooth.</p><h3>2. Floss Daily</h3><p>Flossing removes the plaque your brush cannot reach between teeth, where cavities and gum disease start.</p><h3>3. Clean Your Tongue</h3><p>A quick scrape with a tongue cleaner removes bacteria that cause bad breath.</p><h3>4. Watch Your Sugar</h3><p>Bacteria feed on sugar to produce acid that attacks enamel. Limit sugary snacks and drinks between meals.</p><h3>5. Visit Your Dentist Twice a Year</h3><p>Professional cleaning and early detection keep small problems from becoming big ones.</p>`,
+        contentType: ContentType.BLOG_POST,
+        status: ContentStatus.AI_GENERATED,
+        editorId: superAdmin.id,
+        wordCount: 160,
+        readingTime: 3,
+      },
+    })
+    console.log("✅ Created AI Studio Demo Draft")
+  } else {
+    console.log("✅ AI Studio Demo Draft already exists")
+  }
+
+  // ── 13. Pre-booked appointment (demo patient) ───────────────────────
   const patientUser = await prisma.user.findUniqueOrThrow({ where: { email: "patient@demo.local" } })
   const receptionistUser = await prisma.user.findUniqueOrThrow({ where: { email: "receptionist@demo.local" } })
 

@@ -13,7 +13,11 @@ function buildDirectUrl(raw: string | undefined): string | undefined {
   try {
     const url = new URL(raw)
     url.searchParams.set("connection_limit", "2")
-    url.searchParams.set("sslmode", "require")
+    // Respect an explicit sslmode (e.g. sslmode=disable for local Postgres);
+    // default to `prefer` (TLS when the server supports it) for Supabase.
+    if (!url.searchParams.has("sslmode")) {
+      url.searchParams.set("sslmode", "prefer")
+    }
     return url.href
   } catch {
     return raw

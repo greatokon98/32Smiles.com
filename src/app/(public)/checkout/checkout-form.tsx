@@ -7,6 +7,7 @@ import Link from "next/link"
 import { ShoppingCart, ArrowLeft, Loader2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useCart } from "@/features/cart/cart-context"
+import { formatCurrency } from "@/lib/utils"
 
 export function CheckoutForm({
   initialUser = null,
@@ -122,7 +123,7 @@ export function CheckoutForm({
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
                         <p className="text-sm font-bold text-primary-600 mt-1">
-                          &#8358;{item.price.toLocaleString()}
+                          {formatCurrency(item.price, item.currency)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -228,7 +229,7 @@ export function CheckoutForm({
                   <div className="border-t pt-4 space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-500">Subtotal</span>
-                      <span className="font-medium">&#8358;{subtotal.toLocaleString()}</span>
+                      <span className="font-medium">{formatCurrency(subtotal, items[0]?.currency || "NGN")}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Delivery</span>
@@ -236,7 +237,7 @@ export function CheckoutForm({
                     </div>
                     <div className="border-t pt-2 flex justify-between text-base">
                       <span className="font-bold text-gray-900">Total</span>
-                      <span className="font-bold text-primary-600">&#8358;{subtotal.toLocaleString()}</span>
+                      <span className="font-bold text-primary-600">{formatCurrency(subtotal, items[0]?.currency || "NGN")}</span>
                     </div>
                   </div>
 
@@ -262,7 +263,7 @@ export function CheckoutForm({
                     {submitting ? (
                       <><Loader2 className="h-4 w-4 animate-spin" /> Placing Order...</>
                     ) : (
-                      <>Place Order &#8358;{subtotal.toLocaleString()}</>
+                      <>Place Order {formatCurrency(subtotal, items[0]?.currency || "NGN")}</>
                     )}
                   </button>
                 </form>

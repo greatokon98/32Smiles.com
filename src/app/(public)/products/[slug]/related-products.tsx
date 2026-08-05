@@ -120,15 +120,15 @@ export function RelatedProducts({
                       {salePrice != null ? (
                         <>
                           <span className="text-lg font-bold text-primary-600">
-                            {formatCurrency(salePrice)}
+                            {formatCurrency(salePrice, product.currency)}
                           </span>
                           <span className="text-xs text-gray-400 line-through">
-                            {formatCurrency(price)}
+                            {formatCurrency(price, product.currency)}
                           </span>
                         </>
                       ) : (
                         <span className="text-lg font-bold text-primary-600">
-                          {formatCurrency(price)}
+                          {formatCurrency(price, product.currency)}
                         </span>
                       )}
                     </div>

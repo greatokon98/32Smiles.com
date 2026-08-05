@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ShoppingCart, X, Minus, Plus, Trash2 } from "lucide-react"
 import { useCart } from "./cart-context"
 import { motion, AnimatePresence } from "framer-motion"
+import { formatCurrency } from "@/lib/utils"
 
 export function CartIcon() {
   const { items, itemCount, subtotal, removeItem, updateQuantity, clearCart } = useCart()
@@ -70,7 +71,7 @@ export function CartIcon() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
                             <p className="text-sm font-bold text-primary-600 mt-1">
-                              &#8358;{item.price.toLocaleString()}
+                              {formatCurrency(item.price, item.currency)}
                             </p>
                             <div className="flex items-center gap-2 mt-2">
                               <button
@@ -101,7 +102,7 @@ export function CartIcon() {
                     <div className="border-t p-4 space-y-4">
                       <div className="flex justify-between text-base">
                         <span className="text-gray-600">Subtotal</span>
-                        <span className="font-bold text-gray-900">&#8358;{subtotal.toLocaleString()}</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(subtotal, items[0]?.currency || "NGN")}</span>
                       </div>
                       <Link
                         href="/cart"

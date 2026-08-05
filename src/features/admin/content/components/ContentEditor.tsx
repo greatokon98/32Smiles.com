@@ -527,7 +527,7 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
           {type === "PRODUCT" && (
             <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
               <h3 className="font-medium text-gray-900">Product Details</h3>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Price (NGN)</label>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
                 <input type="number" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none" placeholder="e.g. 3500" /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
                 <input type="text" value={productBrand} onChange={(e) => setProductBrand(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none" placeholder="e.g. Colgate" /></div>
@@ -541,7 +541,7 @@ export default function ContentEditor({ type, id, initialData }: ContentEditorPr
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Sale Price</label>
                 <input type="number" value={productSalePrice} onChange={(e) => setProductSalePrice(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none" placeholder="e.g. 2500" /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                <select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none"><option value="NGN">NGN</option><option value="USD">USD</option></select></div>
+                <select value={productCurrency} onChange={(e) => setProductCurrency(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none"><option value="NGN">NGN</option><option value="USD">USD</option><option value="INR">INR</option></select></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Category ID</label>
                 <input type="text" value={productProductCategoryId} onChange={(e) => setProductProductCategoryId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none" placeholder="Enter product category ID" /></div>
             </div>

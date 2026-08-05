@@ -1,0 +1,400 @@
+#!/usr/bin/env node
+// Demo smoke suite — runs against a local dev server (localhost:3000).
+// Covers: public routes, shop E2E, auth/RBAC (5 roles), admin sections,
+// patient portal, change-password, and a no-leaks pass.
+//
+// Usage:  node scripts/smoke-demo.mjs
+
+import { chromium } from "playwright"
+import { execSync } from "node:child_process"
+
+const BASE = process.env.BASE_URL || "http://localhost:3000"
+const accounts = {
+  superadmin: ["superadmin@demo.local", "Superadmin123!"],
+  admin: ["admin@demo.local", "Admin123!"],
+  editor: ["editor@demo.local", "Editor123!"],
+  receptionist: ["receptionist@demo.local", "Receptionist123!"],
+  patient: ["patient@demo.local", "Patient123!"],
+}
+
+let failures = 0
+let passes = 0
+const results = []
+
+function report(section, name, ok, detail = "") {
+  ok ? passes++ : failures++
+  results.push({ section, name, ok, detail })
+  console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `  — ${detail}` : ""}`)
+}
+
+function psql(sql) {
+  return execSync(
+    `/Applications/Postgres.app/Contents/Versions/latest/bin/psql -d smiles_demo_bangalore -tAc "${sql.replace(/"/g, '\\"')}"`,
+    { encoding: "utf8" }
+  ).trim()
+}
+
+const browser = await chromium.launch()
+const context = await browser.newContext()
+const page = await context.newPage()
+page.setDefaultTimeout(15000)
+
+const globalErrors = []
+page.on("pageerror", (e) => globalErrors.push(`pageerror: ${e.message}`))
+page.on("console", (m) => {
+  if (m.type() === "error") globalErrors.push(`console: ${m.text()}`)
+})
+page.on("requestfailed", (r) => {
+  const err = r.failure()?.errorText || ""
+  if (!/favicon|\.map$/.test(r.url())) globalErrors.push(`requestfailed: ${r.url()} ${err}`)
+})
+page.on("response", (r) => {
+  if (r.status() >= 500) globalErrors.push(`HTTP ${r.status()}: ${r.url()}`)
+})
+
+async function clearGlobalErrors() {
+  globalErrors.length = 0
+}
+
+async function goto(url, opts = {}) {
+  const res = await page.goto(BASE + url, { waitUntil: "load", timeout: 30000, ...opts })
+  await page.waitForTimeout(400)
+  return res
+}
+
+async function login(email, password) {
+  await goto("/admin/login")
+  await page.fill("#email", email)
+  await page.fill("#password", password)
+  await Promise.all([
+    page.waitForURL(/\/admin\/dashboard|\/dashboard/, { timeout: 20000 }),
+    page.click('button[type="submit"]'),
+  ])
+  await page.waitForTimeout(500)
+  return page.url()
+}
+
+async function logout() {
+  await page.goto(BASE + "/admin/login", { waitUntil: "load", timeout: 30000 })
+}
+
+// ────────────────────────── 1. PUBLIC ROUTES ──────────────────────────
+console.log("\n== Public routes ==")
+const publicRoutes = [
+  "/",
+  "/about",
+  "/services",
+  "/services/dental-implants",
+  "/products",
+  "/products/fluoride-toothpaste-100g",
+  "/blog",
+  "/blog/dental-tourism-in-bangalore",
+  "/education/patient",
+  "/education/patient/understanding-tooth-sensitivity",
+  "/faq",
+  "/gallery",
+  "/team",
+  "/contact",
+  "/appointment",
+  "/cart",
+  "/checkout",
+  "/search",
+  "/insurance",
+]
+for (const route of publicRoutes) {
+  const res = await goto(route)
+  const status = res?.status() || 0
+  const bad = status >= 400
+  report("Public", `${status} ${route}`, !bad, bad ? `status ${status}` : "")
+}
+// currency sanity on products page
+{
+  const res = await goto("/products")
+  const html = await page.content()
+  const hasINR = /₹/.test(html) && !/₦/.test(html)
+  report("Public", "products page shows ₹ (INR)", hasINR, hasINR ? "" : "missing ₹ / found ₦")
+}
+
+// ────────────────────────── 2. SHOP E2E ───────────────────────────────
+console.log("\n== Shop E2E (guest checkout) ==")
+const guestEmail = `guest-${Date.now()}@demo.local`
+let guestOrderNumber = ""
+let guestOrderId = ""
+let productId = ""
+
+{
+  // browse → detail
+  await goto("/products")
+  const firstLink = page.locator('a[href*="/products/"]:not([href*="/products?"])').first()
+  await firstLink.click()
+  await page.waitForURL(/\/products\//)
+  productId = new URL(page.url()).pathname.split("/").pop()
+  const detailOk = await page.getByText("Add to Cart").isVisible()
+  report("Shop", "product detail page renders Add to Cart", detailOk)
+
+  // add to cart
+  await page.getByRole("button", { name: "Add to Cart" }).click()
+  await page.waitForTimeout(600)
+  const badge = page.locator('button[aria-label="Shopping cart"] span')
+  const badgeText = (await badge.count()) ? await badge.textContent() : ""
+  report("Shop", "cart badge increments after add", badgeText === "1", `badge="${badgeText}"`)
+
+  // cart page
+  await goto("/cart")
+  const cartHasItem = await page.getByText("Cart Items (1)").isVisible().catch(() => false)
+  report("Shop", "cart page shows item", cartHasItem)
+
+  // proceed to checkout (inline form)
+  await page.getByRole("button", { name: "Proceed to Checkout" }).click()
+  await page.waitForTimeout(300)
+  await page.fill('input[type="text"]', "Guest Shopper")
+  await page.fill('input[type="email"]', guestEmail)
+  await page.fill('input[type="tel"]', "+919876543210")
+  await page.locator("textarea").first().fill("24, 27th Main, HSR Layout, Bengaluru 560102")
+  await page.getByRole("button", { name: /^Place Order/ }).click()
+  await page.waitForTimeout(2500)
+  const placed = await page.getByText("Order Placed!").isVisible().catch(() => false)
+  report("Shop", "guest order placed (201)", placed)
+  if (placed) {
+    guestOrderNumber = (await page.locator("p.text-xl.font-bold").textContent()).trim()
+    guestOrderId = guestOrderNumber
+    report("Shop", `order number captured (${guestOrderNumber})`, true)
+  }
+}
+
+  // confirmation page
+if (guestOrderNumber) {
+  const res = await goto(`/order/confirmation/${guestOrderNumber}`)
+  const ok = res?.status() === 200
+  const html = await page.content()
+  report("Shop", "confirmation page renders", ok && /Order Placed Successfully/.test(html))
+  report("Shop", "confirmation shows ₹", /₹/.test(html) && !/₦/.test(html))
+}
+
+// ────────────────────────── 3. PATIENT ORDER (logged-in) ──────────────
+console.log("\n== Shop E2E (patient checkout) ==")
+let patientOrderNumber = ""
+{
+  const url = await login(accounts.patient[0], accounts.patient[1])
+  report("Auth", "patient login lands on /dashboard", url.endsWith("/dashboard"), url)
+
+  await goto("/products")
+  await page.locator('a[href*="/products/"]:not([href*="/products?"])').first().click()
+  await page.waitForURL(/\/products\//)
+  await page.getByRole("button", { name: "Add to Cart" }).click()
+  await page.waitForTimeout(500)
+  await goto("/cart")
+  await page.getByRole("button", { name: "Proceed to Checkout" }).click()
+  await page.waitForTimeout(300)
+  await page.locator("textarea").first().fill("12, 29th Cross, HSR Layout, Bengaluru 560102")
+  await page.getByRole("button", { name: /^Place Order/ }).click()
+  await page.waitForTimeout(2500)
+  const placed = await page.getByText("Order Placed!").isVisible().catch(() => false)
+  report("Shop", "patient order placed", placed)
+  if (placed) {
+    patientOrderNumber = (await page.locator("p.text-xl.font-bold").textContent()).trim()
+    // patient portal shows it
+    await goto("/dashboard/orders")
+    const seen = await page.getByText(`#${patientOrderNumber}`).isVisible().catch(() => false)
+    report("Shop", "order visible in patient portal /dashboard/orders", seen, patientOrderNumber)
+    const inr = await page.getByText("₹").isVisible().catch(() => false)
+    report("Shop", "patient orders show ₹ (INR)", inr)
+  }
+}
+
+// ────────────────────────── 4. ADMIN (orders + status update) ─────────
+console.log("\n== Admin: orders ==")
+{
+  const url = await login(accounts.superadmin[0], accounts.superadmin[1])
+  report("Auth", "superadmin login lands on /admin/dashboard", url.includes("/admin/dashboard"), url)
+
+  await goto("/admin/orders")
+  const listShowsGuest = guestOrderNumber
+    ? await page.getByText(guestOrderNumber).isVisible().catch(() => false)
+    : false
+  report("Shop", "admin sees guest order in /admin/orders", listShowsGuest)
+  const listShowsPatient = patientOrderNumber
+    ? await page.getByText(patientOrderNumber).isVisible().catch(() => false)
+    : false
+  report("Shop", "admin sees patient order in /admin/orders", listShowsPatient)
+
+  // status update
+  if (guestOrderNumber) {
+    const row = page.locator(`button:has-text("${guestOrderNumber}")`).first()
+    await row.click()
+    await page.waitForTimeout(300)
+    await row.locator('xpath=..').getByRole("button", { name: "CONFIRMED" }).click()
+    await page.waitForTimeout(1500)
+    const dbStatus = psql(`SELECT status FROM orders WHERE "orderNumber" = '${guestOrderNumber}'`)
+    report("Shop", "admin updates order status → CONFIRMED", dbStatus === "CONFIRMED", `db="${dbStatus}"`)
+  }
+}
+
+// ────────────────────────── 5. ADMIN SECTIONS ─────────────────────────
+console.log("\n== Admin sections (superadmin) ==")
+await login(accounts.superadmin[0], accounts.superadmin[1])
+const adminRoutes = [
+  "/admin/dashboard",
+  "/admin/appointments",
+  "/admin/contacts",
+  "/admin/content",
+  "/admin/content/SERVICE",
+  "/admin/media",
+  "/admin/notifications",
+  "/admin/orders",
+  "/admin/roles",
+  "/admin/settings",
+  "/admin/users",
+  "/admin/profile",
+  "/admin/ai-studio",
+  "/admin/ai",
+  "/admin/ai/templates",
+  "/admin/ai/usage",
+  "/admin/analytics",
+  "/admin/communication",
+]
+for (const route of adminRoutes) {
+  const res = await goto(route)
+  const status = res?.status() || 0
+  report("Admin", `${status} ${route}`, status < 400, status >= 400 ? `status ${status}` : "")
+}
+
+// AI Studio graceful no-key behavior
+{
+  await goto("/admin/ai-studio")
+  const hasStep1 = await page.getByText("Select Content Type").isVisible().catch(() => false)
+  const hasBlogPost = await page.getByText("Blog Post").first().isVisible().catch(() => false)
+  report("Admin", "AI Studio renders content-type wizard (no key needed)", hasStep1 && hasBlogPost)
+}
+
+// ────────────────────────── 6. RBAC ───────────────────────────────────
+console.log("\n== RBAC (5 roles) ==")
+const roleExpectations = [
+  ["superadmin", /\/admin\/dashboard/],
+  ["admin", /\/admin\/dashboard/],
+  ["editor", /\/admin\/dashboard/],
+  ["receptionist", /\/admin\/dashboard/],
+  ["patient", /\/dashboard/],
+]
+for (const [role, pattern] of roleExpectations) {
+  const url = await login(...accounts[role])
+  const ok = pattern.test(url)
+  report("RBAC", `${role} lands on ${url}`, ok)
+}
+
+// patient cannot access admin
+{
+  await login(...accounts.patient)
+  await goto("/admin/dashboard")
+  await page.waitForTimeout(1200)
+  const url = page.url()
+  report("RBAC", "patient blocked from /admin/dashboard", !url.includes("/admin/dashboard"), url)
+}
+
+// ────────────────────────── 7. PATIENT PORTAL ─────────────────────────
+console.log("\n== Patient portal ==")
+await login(...accounts.patient)
+const patientRoutes = [
+  "/dashboard",
+  "/dashboard/appointments",
+  "/dashboard/files",
+  "/dashboard/notifications",
+  "/dashboard/orders",
+  "/dashboard/profile",
+]
+for (const route of patientRoutes) {
+  const res = await goto(route)
+  const status = res?.status() || 0
+  report("Patient", `${status} ${route}`, status < 400, status >= 400 ? `status ${status}` : "")
+}
+{
+  await goto("/dashboard/appointments")
+  const appt = await page.getByText("Dental Implants").isVisible().catch(() => false)
+  const confirmed = await page.getByText("Confirmed").first().isVisible().catch(() => false)
+  report("Patient", "seeded appointment visible in patient portal", appt && confirmed)
+}
+
+// ────────────────────────── 8. CHANGE PASSWORD ────────────────────────
+console.log("\n== Change password + re-login ==")
+{
+  const newPass = "TempNewPass123!"
+  await login(...accounts.patient)
+  await goto("/dashboard/profile")
+  const changed = await page.evaluate(async (pw) => {
+    const r = await fetch("/api/user/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword: "Patient123!", newPassword: pw }),
+    })
+    return r.status
+  }, newPass)
+  report("Auth", "change password returns 200", changed === 200, `status ${changed}`)
+
+  await logout()
+  const url = await login(accounts.patient[0], newPass)
+  report("Auth", "re-login with new password works", url.includes("/dashboard"), url)
+
+  // restore original password
+  const restored = await page.evaluate(async (pw) => {
+    const r = await fetch("/api/user/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword: pw, newPassword: "Patient123!" }),
+    })
+    return r.status
+  }, newPass)
+  report("Auth", "restore original password", restored === 200, `status ${restored}`)
+}
+
+// ────────────────────────── 9. NO-LEAKS / CLEANUP ─────────────────────
+console.log("\n== No-leaks / cleanup ==")
+{
+  // orphan order_items check (order_items must always have a parent order + product)
+  const orphanItems = Number(psql(`SELECT COUNT(*) FROM order_items oi WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.id = oi."orderId") OR NOT EXISTS (SELECT 1 FROM products p WHERE p.id = oi."productId")`))
+  report("Leaks", "no orphan order_items (FK integrity)", orphanItems === 0, `found ${orphanItems}`)
+
+  // products must reference real categories
+  const orphanProducts = Number(psql(`SELECT COUNT(*) FROM products p WHERE NOT EXISTS (SELECT 1 FROM product_categories pc WHERE pc.id = p."productCategoryId")`))
+  report("Leaks", "no products with missing category", orphanProducts === 0, `found ${orphanProducts}`)
+
+  // cleanup test artifacts
+  if (guestOrderNumber) {
+    psql(`DELETE FROM orders WHERE "orderNumber" = '${guestOrderNumber}'`)
+  }
+  if (patientOrderNumber) {
+    psql(`DELETE FROM orders WHERE "orderNumber" = '${patientOrderNumber}'`)
+  }
+  const guestId = psql(`SELECT id FROM users WHERE email = '${guestEmail}'`)
+  if (guestId) {
+    psql(`DELETE FROM messages WHERE "senderId" = '${guestId}'`)
+    psql(`DELETE FROM conversations WHERE "userAId" = '${guestId}' OR "userBId" = '${guestId}'`)
+    psql(`DELETE FROM notifications WHERE "userId" = '${guestId}'`)
+    psql(`DELETE FROM audit_logs WHERE "userId" = '${guestId}'`)
+    psql(`DELETE FROM newsletter_subscribers WHERE "userId" = '${guestId}'`)
+    psql(`DELETE FROM users WHERE id = '${guestId}'`)
+  }
+  const remainingOrders = Number(psql(`SELECT COUNT(*) FROM orders`))
+  report("Leaks", "test orders removed (back to seeded state)", remainingOrders === 0, `orders=${remainingOrders}`)
+  report("Leaks", "guest account removed", psql(`SELECT COUNT(*) FROM users WHERE email = '${guestEmail}'`) === "0")
+
+  // browser-side errors gathered during run
+  const consoleSeen = [...new Set(globalErrors.filter((e) => e.startsWith("console:")))]
+  const hardSeen = [...new Set(globalErrors.filter((e) => !e.startsWith("console:") || !/401|Unauthorized/.test(e)))]
+  const hard = hardSeen.filter((e) => !/401|Unauthorized|aborted|net::ERR_ABORTED/.test(e))
+  report("Leaks", "no console/page/request errors during run", hard.length === 0, hard.slice(0, 5).join(" | "))
+  if (consoleSeen.length) {
+    report("Leaks", `console noise only (informational): ${consoleSeen.slice(0, 3).join(" | ")}`, true)
+  }
+}
+
+await browser.close()
+
+// ────────────────────────── SUMMARY ───────────────────────────────────
+console.log(`\n=== Smoke results: ${passes} passed, ${failures} failed ===`)
+if (failures > 0) {
+  console.log("\nFailures:")
+  for (const r of results.filter((r) => !r.ok)) {
+    console.log(`  [${r.section}] ${r.name}${r.detail ? ` — ${r.detail}` : ""}`)
+  }
+  process.exit(1)
+}
