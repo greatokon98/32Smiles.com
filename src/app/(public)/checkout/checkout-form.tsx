@@ -1,24 +1,24 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { ShoppingCart, ArrowLeft, Loader2, Trash2 } from "lucide-react"
+import { ShoppingCart, ArrowLeft, Loader2, Trash2, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { useCart } from "@/features/cart/cart-context"
 import { formatCurrency } from "@/lib/utils"
 
-export function CheckoutForm({
-  initialUser = null,
-}: {
-  initialUser?: { name: string; email: string; phone: string; address: string } | null
-}) {
+type CheckoutUser = { name: string; email: string; phone: string; address: string } | null
+
+export function CheckoutForm({ initialUser = null }: { initialUser?: CheckoutUser }) {
   const router = useRouter()
-  const { items, itemCount, subtotal, updateQuantity, removeItem } = useCart()
+  const { items, itemCount, subtotal, updateQuantity, removeItem, clearCart } = useCart()
   const [loaded, setLoaded] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [emailExistsError, setEmailExistsError] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({})
+  const prunedRef = useRef(false)
   const [form, setForm] = useState({
     name: initialUser?.name || "",
     email: initialUser?.email || "",
@@ -31,10 +31,52 @@ export function CheckoutForm({
     setLoaded(true)
   }, [])
 
+  useEffect(() => {
+    if (!loaded || prunedRef.current) return
+    if (items.length === 0) return
+    prunedRef.current = true
+    ;(async () => {
+      try {
+        const res = await fetch("/api/products/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productIds: items.map((i) => i.productId) }),
+        })
+        if (!res.ok) return
+        const { invalid } = await res.json()
+        if (Array.isArray(invalid) && invalid.length > 0) {
+          for (const id of invalid) removeItem(id)
+          toast.info("Some items in your cart are no longer available and were removed.")
+        }
+      } catch {
+        // ignore — stale items are still caught on submit
+      }
+    })()
+  }, [loaded, items, removeItem])
+
+  function isLocked(field: "name" | "email" | "phone") {
+    return !!initialUser && !!form[field]
+  }
+
+  function validate() {
+    const errors: Record<string, boolean> = {}
+    if (!form.name.trim()) errors.name = true
+    if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = true
+    if (!form.phone.trim()) errors.phone = true
+    if (!form.address.trim()) errors.address = true
+    setFieldErrors(errors)
+    const first = Object.keys(errors)[0]
+    if (first) {
+      const el = document.getElementById(`checkout-${first}`)
+      el?.focus()
+    }
+    return Object.keys(errors).length === 0
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.name || !form.email || !form.phone || !form.address) {
-      toast.error("Please fill in all required fields")
+    if (!validate()) {
+      toast.error("Please complete the highlighted fields.")
       return
     }
     setSubmitting(true)
@@ -52,26 +94,40 @@ export function CheckoutForm({
           items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, price: i.price })),
         }),
       })
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        const err = await res.json()
-        if (res.status === 409 && err.code === "EMAIL_EXISTS") {
+        if (res.status === 409 && data?.code === "STALE_ITEMS") {
+          for (const id of data.staleProductIds ?? []) removeItem(id)
+          toast.info("Some items in your cart are no longer available and were removed.")
+          setFieldErrors({})
+          return
+        }
+        if (res.status === 409 && data?.code === "EMAIL_EXISTS") {
           setEmailExistsError(true)
           return
         }
-        throw new Error(err.error || "Order failed")
+        throw new Error(data?.error || "Order failed")
       }
-      const data = await res.json()
-      if (data.accountCreated) {
+      if (data?.accountCreated) {
         toast.success("Account created! Check your email for login instructions.")
       }
       toast.success("Order placed successfully!")
-      router.push(`/order/confirmation/${data.orderNumber}`)
+      clearCart()
+      router.push(`/order/confirmation/${data?.orderNumber}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to place order. Please try again.")
     } finally {
       setSubmitting(false)
     }
   }
+
+  const inputClass = (field: "name" | "email" | "phone" | "address") =>
+    `w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none ${
+      fieldErrors[field] ? "border-red-500 focus:ring-red-500" : "border-gray-300"
+    } ${field !== "address" && isLocked(field as "name" | "email" | "phone") ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`
+
+  const requiredHint = (field: string) =>
+    fieldErrors[field] ? <p className="text-red-600 text-xs mt-1">Required</p> : null
 
   if (loaded && items.length === 0) {
     return (
@@ -167,53 +223,66 @@ export function CheckoutForm({
                     </a>
                   </div>
                 )}
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} noValidate className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
                     <input
+                      id="checkout-name"
                       type="text"
                       required
-                      disabled={!!initialUser}
+                      disabled={isLocked("name")}
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none ${initialUser ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
+                      className={inputClass("name")}
                       placeholder="John Doe"
                     />
+                    {requiredHint("name")}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
                     <input
+                      id="checkout-email"
                       type="email"
                       required
-                      disabled={!!initialUser}
+                      disabled={isLocked("email")}
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none ${initialUser ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
+                      className={inputClass("email")}
                       placeholder="john@example.com"
                     />
+                    {requiredHint("email")}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
                     <input
+                      id="checkout-phone"
                       type="tel"
                       required
-                      disabled={!!initialUser}
+                      disabled={isLocked("phone")}
                       value={form.phone}
                       onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                      className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none ${initialUser ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
-                      placeholder="+234 800 000 0000"
+                      className={inputClass("phone")}
+                      placeholder="+91 98450 00000"
                     />
+                    {requiredHint("phone")}
+                    {initialUser && !form.phone && (
+                      <p className="text-xs text-amber-700 mt-1">
+                        Add your phone number — it will be saved to your profile.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Address *</label>
                     <textarea
+                      id="checkout-address"
                       required
                       rows={2}
                       value={form.address}
                       onChange={(e) => setForm({ ...form, address: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                      className={`${inputClass("address")} resize-none`}
                       placeholder="Street, city, state"
                     />
+                    {requiredHint("address")}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
@@ -266,6 +335,10 @@ export function CheckoutForm({
                       <>Place Order {formatCurrency(subtotal, items[0]?.currency || "NGN")}</>
                     )}
                   </button>
+                  <p className="flex items-start gap-1.5 text-xs text-gray-500">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    Missing details are saved to your profile automatically, so you won&apos;t need to re-enter them next time.
+                  </p>
                 </form>
               </div>
             </div>

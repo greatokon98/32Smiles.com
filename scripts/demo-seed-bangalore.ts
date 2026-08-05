@@ -10,10 +10,10 @@ async function main() {
   // ── 1. Demo accounts ───────────────────────────────────────────────
   // Static passwords because demo emails are .local (no delivery possible).
   const accounts: { email: string; password: string; name: string; role: string; phone?: string; address?: string }[] = [
-    { email: "superadmin@demo.local", password: "Superadmin123!", name: "Super Admin", role: "SUPER_ADMIN" },
-    { email: "admin@demo.local", password: "Admin123!", name: "Clinic Admin", role: "ADMIN" },
-    { email: "editor@demo.local", password: "Editor123!", name: "Content Editor", role: "EDITOR" },
-    { email: "receptionist@demo.local", password: "Receptionist123!", name: "Receptionist", role: "RECEPTIONIST" },
+    { email: "superadmin@demo.local", password: "Superadmin123!", name: "Super Admin", role: "SUPER_ADMIN", phone: "+919845001122", address: "24, 27th Main Road, HSR Layout, Bengaluru 560102" },
+    { email: "admin@demo.local", password: "Admin123!", name: "Clinic Admin", role: "ADMIN", phone: "+919845001122", address: "24, 27th Main Road, HSR Layout, Bengaluru 560102" },
+    { email: "editor@demo.local", password: "Editor123!", name: "Content Editor", role: "EDITOR", phone: "+919845001122", address: "24, 27th Main Road, HSR Layout, Bengaluru 560102" },
+    { email: "receptionist@demo.local", password: "Receptionist123!", name: "Receptionist", role: "RECEPTIONIST", phone: "+919845001122", address: "24, 27th Main Road, HSR Layout, Bengaluru 560102" },
     { email: "patient@demo.local", password: "Patient123!", name: "Demo Patient", role: "VIEWER", phone: "+919845001122", address: "24, 27th Main Road, HSR Layout, Bengaluru 560102" },
   ]
 

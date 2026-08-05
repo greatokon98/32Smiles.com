@@ -96,6 +96,19 @@ export async function POST(request: NextRequest) {
       select: { id: true, price: true, currency: true, content: { select: { title: true } } },
     })
 
+    const foundIds = new Set(products.map((p) => p.id))
+    const staleProductIds = [...new Set(productIds.filter((id: string) => !foundIds.has(id)))]
+    if (staleProductIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Some items in your cart are no longer available and were removed.",
+          code: "STALE_ITEMS",
+          staleProductIds,
+        },
+        { status: 409 }
+      )
+    }
+
     const priceMap = new Map(products.map((p) => [p.id, Number(p.price)]))
 
     let subtotal = 0
@@ -144,6 +157,18 @@ export async function POST(request: NextRequest) {
         },
       })
       accountCreated = true
+    } else if (sessionEmail && sessionEmail === customerEmail.toLowerCase()) {
+      try {
+        await prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            ...(customerPhone ? { phone: customerPhone } : {}),
+            ...(deliveryAddress ? { address: deliveryAddress } : {}),
+          },
+        })
+      } catch (profileError) {
+        console.error("[API] Failed to persist checkout fields to profile:", profileError)
+      }
     }
 
     try {

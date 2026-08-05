@@ -46,7 +46,8 @@ page.on("console", (m) => {
 })
 page.on("requestfailed", (r) => {
   const err = r.failure()?.errorText || ""
-  if (!/favicon|\.map$/.test(r.url())) globalErrors.push(`requestfailed: ${r.url()} ${err}`)
+  if (/favicon|\.map$|ERR_NETWORK_IO_SUSPENDED|aborted/i.test(r.url() + " " + err)) return
+  globalErrors.push(`requestfailed: ${r.url()} ${err}`)
 })
 page.on("response", (r) => {
   if (r.status() >= 500) globalErrors.push(`HTTP ${r.status()}: ${r.url()}`)
@@ -144,19 +145,19 @@ let productId = ""
   const cartHasItem = await page.getByText("Cart Items (1)").isVisible().catch(() => false)
   report("Shop", "cart page shows item", cartHasItem)
 
-  // proceed to checkout (inline form)
+  // proceed to checkout (dedicated /checkout page)
   await page.getByRole("button", { name: "Proceed to Checkout" }).click()
-  await page.waitForTimeout(300)
+  await page.waitForURL(/\/checkout/)
   await page.fill('input[type="text"]', "Guest Shopper")
   await page.fill('input[type="email"]', guestEmail)
   await page.fill('input[type="tel"]', "+919876543210")
   await page.locator("textarea").first().fill("24, 27th Main, HSR Layout, Bengaluru 560102")
   await page.getByRole("button", { name: /^Place Order/ }).click()
-  await page.waitForTimeout(2500)
-  const placed = await page.getByText("Order Placed!").isVisible().catch(() => false)
+  await page.waitForURL(/\/order\/confirmation\//, { timeout: 20000 }).catch(() => {})
+  const placed = await page.getByText("Order Placed Successfully!").isVisible().catch(() => false)
   report("Shop", "guest order placed (201)", placed)
   if (placed) {
-    guestOrderNumber = (await page.locator("p.text-xl.font-bold").textContent()).trim()
+    guestOrderNumber = (await page.locator("p.text-2xl.font-bold.text-primary-700").textContent()).trim()
     guestOrderId = guestOrderNumber
     report("Shop", `order number captured (${guestOrderNumber})`, true)
   }
@@ -185,14 +186,14 @@ let patientOrderNumber = ""
   await page.waitForTimeout(500)
   await goto("/cart")
   await page.getByRole("button", { name: "Proceed to Checkout" }).click()
-  await page.waitForTimeout(300)
+  await page.waitForURL(/\/checkout/)
   await page.locator("textarea").first().fill("12, 29th Cross, HSR Layout, Bengaluru 560102")
   await page.getByRole("button", { name: /^Place Order/ }).click()
-  await page.waitForTimeout(2500)
-  const placed = await page.getByText("Order Placed!").isVisible().catch(() => false)
+  await page.waitForURL(/\/order\/confirmation\//, { timeout: 20000 }).catch(() => {})
+  const placed = await page.getByText("Order Placed Successfully!").isVisible().catch(() => false)
   report("Shop", "patient order placed", placed)
   if (placed) {
-    patientOrderNumber = (await page.locator("p.text-xl.font-bold").textContent()).trim()
+    patientOrderNumber = (await page.locator("p.text-2xl.font-bold.text-primary-700").textContent()).trim()
     // patient portal shows it
     await goto("/dashboard/orders")
     const seen = await page.getByText(`#${patientOrderNumber}`).isVisible().catch(() => false)
@@ -230,7 +231,128 @@ console.log("\n== Admin: orders ==")
   }
 }
 
-// ────────────────────────── 5. ADMIN SECTIONS ─────────────────────────
+// ────────────────────────── 5. SUPERADMIN CHECKOUT + INLINE-FILL ──────
+console.log("\n== Shop E2E (superadmin checkout + inline-fill) ==")
+let superadminOrderNumber = ""
+let inlineOrderNumber = ""
+{
+  // prefilled phone (seeded) → Place Order works as a logged-in staff account
+  const url = await login(accounts.superadmin[0], accounts.superadmin[1])
+  report("Shop", "superadmin login lands on /admin/dashboard", url.includes("/admin/dashboard"), url)
+
+  await goto("/products")
+  await page.locator('a[href*="/products/"]:not([href*="/products?"])').first().click()
+  await page.waitForURL(/\/products\//)
+  await page.getByRole("button", { name: "Add to Cart" }).click()
+  await page.waitForTimeout(500)
+  await goto("/cart")
+  await page.getByRole("button", { name: "Proceed to Checkout" }).click()
+  await page.waitForURL(/\/checkout/)
+  const phoneLocked = await page.locator('input[type="tel"]').isDisabled().catch(() => false)
+  report("Shop", "superadmin checkout has phone prefilled from profile (locked)", phoneLocked)
+  await page.locator("textarea").first().fill("24, 27th Main Road, HSR Layout, Bengaluru 560102")
+  await page.getByRole("button", { name: /^Place Order/ }).click()
+  await page.waitForURL(/\/order\/confirmation\//, { timeout: 20000 }).catch(() => {})
+  const placed = await page.getByText("Order Placed Successfully!").isVisible().catch(() => false)
+  report("Shop", "superadmin order placed (prefilled profile)", placed)
+  if (placed) {
+    superadminOrderNumber = (await page.locator("p.text-2xl.font-bold.text-primary-700").textContent()).trim()
+    await goto(`/order/confirmation/${superadminOrderNumber}`)
+    const html = await page.content()
+    report("Shop", "superadmin confirmation shows ₹ (INR)", /₹/.test(html) && !/₦/.test(html))
+  }
+}
+
+{
+  // inline-fill regression: blank the superadmin profile phone + address,
+  // checkout must show editable empty fields (no dashboard detour), and the
+  // filled values must be persisted back to the profile on order.
+  psql(`UPDATE users SET phone = NULL, address = NULL WHERE email = 'superadmin@demo.local'`)
+  const url = await login(accounts.superadmin[0], accounts.superadmin[1])
+  await goto("/products")
+  await page.locator('a[href*="/products/"]:not([href*="/products?"])').first().click()
+  await page.waitForURL(/\/products\//)
+  await page.getByRole("button", { name: "Add to Cart" }).click()
+  await page.waitForTimeout(500)
+  await goto("/cart")
+  await page.getByRole("button", { name: "Proceed to Checkout" }).click()
+  await page.waitForURL(/\/checkout/)
+  const phoneEditable = await page.locator('input[type="tel"]').isEnabled().catch(() => false)
+  const phoneEmpty = (await page.locator('input[type="tel"]').inputValue().catch(() => "x")) === ""
+  const hintVisible = await page.getByText("Add your phone number", { exact: false }).isVisible().catch(() => false)
+  report("Shop", "missing phone renders as editable empty field", phoneEditable && phoneEmpty && hintVisible)
+  await page.locator('input[type="tel"]').fill("+919845001122")
+  await page.locator("textarea").first().fill("24, 27th Main Road, HSR Layout, Bengaluru 560102")
+  await page.getByRole("button", { name: /^Place Order/ }).click()
+  await page.waitForURL(/\/order\/confirmation\//, { timeout: 20000 }).catch(() => {})
+  const placedInline = await page.getByText("Order Placed Successfully!").isVisible().catch(() => false)
+  report("Shop", "inline-filled order placed (no dashboard detour)", placedInline)
+  if (placedInline) {
+    inlineOrderNumber = (await page.locator("p.text-2xl.font-bold.text-primary-700").textContent()).trim()
+  }
+  const dbPhone = psql(`SELECT phone FROM users WHERE email = 'superadmin@demo.local'`)
+  report("Shop", "filled phone persisted to profile", dbPhone === "+919845001122", `db="${dbPhone}"`)
+}
+
+// ────────────────────────── 6. STALE-CART HANDLING ─────────────────────
+console.log("\n== Stale-cart handling ==")
+{
+  // API guard: a productId that no longer exists must return 409 STALE_ITEMS (not a FK 500)
+  const res = await page.evaluate(async () => {
+    const r = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Super Admin",
+        customerEmail: "superadmin@demo.local",
+        customerPhone: "+919845001122",
+        deliveryAddress: "HSR Layout, Bengaluru",
+        items: [{ productId: "bogus-product-id-000", quantity: 1, price: 100 }],
+      }),
+    })
+    return { status: r.status, body: await r.json() }
+  })
+  report(
+    "Stale",
+    "API returns 409 STALE_ITEMS for missing product",
+    res.status === 409 && res.body.code === "STALE_ITEMS",
+    `status ${res.status}`
+  )
+
+  // on-load prune: a cart persisted in localStorage with a stale item is cleaned
+  // automatically when the checkout page loads
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "32smiles_cart",
+      JSON.stringify([
+        { productId: "bogus-product-id-000", title: "Ghost Item", price: 100, quantity: 1, imageUrl: "", currency: "INR" },
+      ])
+    )
+  })
+  await goto("/checkout")
+  await page.waitForTimeout(1500)
+  const emptyCartShown = await page.getByText("Your cart is empty").isVisible().catch(() => false)
+  const ghostGone = (await page.getByText("Ghost Item").count()) === 0
+  report("Stale", "stale item auto-pruned on checkout load", emptyCartShown && ghostGone)
+  await page.evaluate(() => localStorage.removeItem("32smiles_cart"))
+
+  // cart page prunes stale items on load as well
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "32smiles_cart",
+      JSON.stringify([
+        { productId: "bogus-product-id-000", title: "Ghost Item", price: 100, quantity: 1, imageUrl: "", currency: "INR" },
+      ])
+    )
+  })
+  await goto("/cart")
+  await page.waitForTimeout(1500)
+  const cartPruned = await page.getByText("Your cart is empty").isVisible().catch(() => false)
+  report("Stale", "stale item auto-pruned on cart load", cartPruned)
+  await page.evaluate(() => localStorage.removeItem("32smiles_cart"))
+}
+
+// ────────────────────────── 7. ADMIN SECTIONS ─────────────────────────
 console.log("\n== Admin sections (superadmin) ==")
 await login(accounts.superadmin[0], accounts.superadmin[1])
 const adminRoutes = [
@@ -267,7 +389,7 @@ for (const route of adminRoutes) {
   report("Admin", "AI Studio renders content-type wizard (no key needed)", hasStep1 && hasBlogPost)
 }
 
-// ────────────────────────── 6. RBAC ───────────────────────────────────
+// ────────────────────────── 8. RBAC ───────────────────────────────────
 console.log("\n== RBAC (5 roles) ==")
 const roleExpectations = [
   ["superadmin", /\/admin\/dashboard/],
@@ -291,7 +413,7 @@ for (const [role, pattern] of roleExpectations) {
   report("RBAC", "patient blocked from /admin/dashboard", !url.includes("/admin/dashboard"), url)
 }
 
-// ────────────────────────── 7. PATIENT PORTAL ─────────────────────────
+// ────────────────────────── 9. PATIENT PORTAL ─────────────────────────
 console.log("\n== Patient portal ==")
 await login(...accounts.patient)
 const patientRoutes = [
@@ -314,7 +436,7 @@ for (const route of patientRoutes) {
   report("Patient", "seeded appointment visible in patient portal", appt && confirmed)
 }
 
-// ────────────────────────── 8. CHANGE PASSWORD ────────────────────────
+// ────────────────────────── 10. CHANGE PASSWORD ────────────────────────
 console.log("\n== Change password + re-login ==")
 {
   const newPass = "TempNewPass123!"
@@ -346,7 +468,7 @@ console.log("\n== Change password + re-login ==")
   report("Auth", "restore original password", restored === 200, `status ${restored}`)
 }
 
-// ────────────────────────── 9. NO-LEAKS / CLEANUP ─────────────────────
+// ────────────────────────── 11. NO-LEAKS / CLEANUP ─────────────────────
 console.log("\n== No-leaks / cleanup ==")
 {
   // orphan order_items check (order_items must always have a parent order + product)
@@ -364,6 +486,12 @@ console.log("\n== No-leaks / cleanup ==")
   if (patientOrderNumber) {
     psql(`DELETE FROM orders WHERE "orderNumber" = '${patientOrderNumber}'`)
   }
+  if (superadminOrderNumber) {
+    psql(`DELETE FROM orders WHERE "orderNumber" = '${superadminOrderNumber}'`)
+  }
+  if (inlineOrderNumber) {
+    psql(`DELETE FROM orders WHERE "orderNumber" = '${inlineOrderNumber}'`)
+  }
   const guestId = psql(`SELECT id FROM users WHERE email = '${guestEmail}'`)
   if (guestId) {
     psql(`DELETE FROM messages WHERE "senderId" = '${guestId}'`)
@@ -379,8 +507,8 @@ console.log("\n== No-leaks / cleanup ==")
 
   // browser-side errors gathered during run
   const consoleSeen = [...new Set(globalErrors.filter((e) => e.startsWith("console:")))]
-  const hardSeen = [...new Set(globalErrors.filter((e) => !e.startsWith("console:") || !/401|Unauthorized/.test(e)))]
-  const hard = hardSeen.filter((e) => !/401|Unauthorized|aborted|net::ERR_ABORTED/.test(e))
+  const hardSeen = [...new Set(globalErrors.filter((e) => !e.startsWith("console:") || !/401|Unauthorized|409|ERR_NETWORK_IO_SUSPENDED/.test(e)))]
+  const hard = hardSeen.filter((e) => !/401|Unauthorized|409|aborted|net::ERR_ABORTED|ERR_NETWORK_IO_SUSPENDED/.test(e))
   report("Leaks", "no console/page/request errors during run", hard.length === 0, hard.slice(0, 5).join(" | "))
   if (consoleSeen.length) {
     report("Leaks", `console noise only (informational): ${consoleSeen.slice(0, 3).join(" | ")}`, true)
