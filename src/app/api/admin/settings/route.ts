@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { guardPermission } from "@/lib/require-permission-route"
+import { revalidateAllPublicPaths } from "@/lib/revalidate-paths"
 
 export async function GET() {
   const { response } = await guardPermission("settings", "read")
@@ -66,6 +67,8 @@ export async function PUT(request: NextRequest) {
     )
 
     await prisma.$transaction(upserts)
+
+    await revalidateAllPublicPaths()
 
     return NextResponse.json({ success: true })
   } catch (error) {

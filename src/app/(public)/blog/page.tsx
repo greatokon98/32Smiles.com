@@ -5,7 +5,7 @@ import { siteConfig } from "@/config/site"
 import { serializeContent } from "@/lib/utils"
 import { BlogList } from "./blog-list"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
 
 export const metadata: Metadata = {
   title: "Blog",

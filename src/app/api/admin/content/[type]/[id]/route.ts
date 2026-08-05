@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { contentService } from "@/services/content.service"
 import { serializeContent } from "@/lib/utils"
 import { guardPermission } from "@/lib/require-permission-route"
+import { revalidateContentPaths } from "@/lib/revalidate-paths"
 
 // GET /api/admin/content/[type]/[id] - Get single content
 export async function GET(
@@ -39,6 +40,7 @@ export async function PUT(
     const body = await request.json()
 
     const content = await contentService.update(id, body, session.user.id)
+    await revalidateContentPaths(content.type, content.slug)
     return NextResponse.json(serializeContent(content))
   } catch (error) {
     console.error("[API] Content update error:", error)
@@ -57,7 +59,9 @@ export async function DELETE(
 
   try {
     const { id } = await params
+    const existing = await contentService.getById(id)
     await contentService.delete(id)
+    await revalidateContentPaths(existing?.type, existing?.slug)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("[API] Content delete error:", error)

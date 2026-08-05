@@ -11,7 +11,7 @@ import { AboutStory } from "./about-story"
 import { AboutMission } from "./about-mission"
 import { AboutFeatures } from "./about-features"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
 
 export const metadata: Metadata = {
   title: "About Us",

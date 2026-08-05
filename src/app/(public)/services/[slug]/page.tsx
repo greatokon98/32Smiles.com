@@ -18,7 +18,19 @@ import { siteConfig } from "@/config/site"
 import { ServiceJsonLd } from "@/features/seo/JsonLd"
 import { RelatedServices } from "./related-services"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
+
+export async function generateStaticParams() {
+  const services = await prisma.content.findMany({
+    where: {
+      type: ContentType.SERVICE,
+      status: ContentStatus.PUBLISHED,
+      deletedAt: null,
+    },
+    select: { slug: true },
+  })
+  return services.map((s) => ({ slug: s.slug }))
+}
 
 type ServiceItem = Prisma.ContentGetPayload<{
   include: {
@@ -101,11 +113,13 @@ export default async function ServiceDetailPage({ params }: Props) {
   const preparationSteps = extractJsonArray(srvRaw, "preparationSteps")
   const recoverySteps = extractJsonArray(srvRaw, "recoverySteps")
 
-  // Increment view count (fire and forget)
-  prisma.content.update({
-    where: { id: service.id },
-    data: { viewCount: { increment: 1 } },
-  })
+  // Increment view count (fire and forget, skip during build-time prerender)
+  if (process.env.NEXT_PHASE !== "phase-production-build") {
+    prisma.content.update({
+      where: { id: service.id },
+      data: { viewCount: { increment: 1 } },
+    })
+  }
 
   const serviceUrl = `${siteConfig.url}/services/${slug}`
 

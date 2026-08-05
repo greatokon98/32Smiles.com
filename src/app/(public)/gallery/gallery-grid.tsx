@@ -177,7 +177,7 @@ export function GalleryGrid({
           variants={container}
           initial="hidden"
           animate="show"
-          className="columns-1 sm:columns-2 lg:columns-3 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
         >
           {filtered.map((galleryItem, index) => {
             const afterSrc = getItemAfterSrc(galleryItem)
@@ -191,7 +191,6 @@ export function GalleryGrid({
               <motion.div
                 key={galleryItem.id}
                 variants={item}
-                className="break-inside-avoid mb-4"
               >
                 <button
                   onClick={() => openLightbox(index)}

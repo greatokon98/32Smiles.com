@@ -10,7 +10,21 @@ import { formatDate } from "@/lib/utils"
 import { BlogPostJsonLd } from "@/features/seo/JsonLd"
 import { SocialShareButtons } from "./social-share-buttons"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
+
+export async function generateStaticParams() {
+  const posts = await prisma.blogPost.findMany({
+    where: {
+      content: {
+        type: ContentType.BLOG_POST,
+        status: ContentStatus.PUBLISHED,
+        deletedAt: null,
+      },
+    },
+    select: { content: { select: { slug: true } } },
+  })
+  return posts.map((p) => ({ slug: p.content.slug }))
+}
 
 type BlogPostItem = Prisma.BlogPostGetPayload<{
   include: {
@@ -130,11 +144,13 @@ export default async function BlogPostPage({ params }: Props) {
   const postUrl = `${siteConfig.url}/blog/${content.slug}`
   const relatedPosts = await getRelatedPosts(content.id)
 
-  // Increment view count (fire and forget)
-  prisma.content.update({
-    where: { id: content.id },
-    data: { viewCount: { increment: 1 } },
-  })
+  // Increment view count (fire and forget, skip during build-time prerender)
+  if (process.env.NEXT_PHASE !== "phase-production-build") {
+    prisma.content.update({
+      where: { id: content.id },
+      data: { viewCount: { increment: 1 } },
+    })
+  }
 
   return (
     <>

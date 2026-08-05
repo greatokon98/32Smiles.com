@@ -8,7 +8,7 @@ import { ServicesGrid } from "./services-grid"
 import { DentalJourney } from "../dental-journey"
 import { siteConfig } from "@/config/site"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
 
 export const metadata: Metadata = {
   title: "Our Services",

@@ -8,7 +8,19 @@ import prisma from "@/lib/prisma"
 import { siteConfig } from "@/config/site"
 import { formatDate } from "@/lib/utils"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
+
+export async function generateStaticParams() {
+  const articles = await prisma.content.findMany({
+    where: {
+      type: ContentType.EDUCATION_PATIENT,
+      status: ContentStatus.PUBLISHED,
+      deletedAt: null,
+    },
+    select: { slug: true },
+  })
+  return articles.map((a) => ({ slug: a.slug }))
+}
 
 type EducationArticleItem = Prisma.ContentGetPayload<{
   include: {
@@ -118,11 +130,13 @@ export default async function PatientArticlePage({ params }: Props) {
   const imageUrl = article.featuredImage?.url
   const relatedArticles = await getRelatedArticles(article.id)
 
-  // Increment view count (fire and forget)
-  prisma.content.update({
-    where: { id: article.id },
-    data: { viewCount: { increment: 1 } },
-  })
+  // Increment view count (fire and forget, skip during build-time prerender)
+  if (process.env.NEXT_PHASE !== "phase-production-build") {
+    prisma.content.update({
+      where: { id: article.id },
+      data: { viewCount: { increment: 1 } },
+    })
+  }
 
   return (
     <>

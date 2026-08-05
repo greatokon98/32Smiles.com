@@ -4,8 +4,9 @@ import { ContentType, ContentStatus } from "@prisma/client"
 import { serializeContent } from "@/lib/utils"
 import { siteConfig } from "@/config/site"
 import { ProductsGrid } from "./products-grid"
+import { getProductFallbackImages } from "@/lib/product-images"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
 
 export const metadata: Metadata = {
   title: "Our Products",
@@ -22,17 +23,7 @@ function getSetting(settings: { key: string; value: string }[], key: string, fal
 
 export default async function ProductsPage() {
   const settings = await prisma.setting.findMany()
-  const productImages: Record<string, string> = (() => {
-    const defaultItems = JSON.stringify({
-      "professional-toothpaste": "/images/services/1.jpg",
-      "electric-toothbrush": "/images/services/2.jpg",
-      "dental-floss": "/images/services/3.jpg",
-      "mouthwash": "/images/services/b1.jpg",
-      "teeth-whitening-kit": "/images/services/single-service.jpg",
-      "oral-irrigator": "/images/services/1.jpg",
-    })
-    try { return JSON.parse(getSetting(settings, "product_fallback_images", defaultItems)) } catch { return JSON.parse(defaultItems) }
-  })()
+  const productImages = await getProductFallbackImages(settings)
   const [products, categories] = await Promise.all([
     prisma.product.findMany({
       where: {

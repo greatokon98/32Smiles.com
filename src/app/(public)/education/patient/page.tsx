@@ -11,7 +11,7 @@ function getSetting(settings: { key: string; value: string }[], key: string, fal
   return settings.find((s) => s.key === key)?.value || fallback
 }
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
 
 export const metadata: Metadata = {
   title: "Patient Education",

@@ -14,7 +14,7 @@ import { BlogCarousel } from "./blog-carousel"
 import { AnimatedSection } from "./section-animation"
 import { TransformationsCarousel } from "./transformations-carousel"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
 
 
 function getSetting(settings: { key: string; value: string }[], key: string, fallback: string): string {

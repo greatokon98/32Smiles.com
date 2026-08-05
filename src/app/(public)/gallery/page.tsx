@@ -9,7 +9,7 @@ function getSetting(settings: { key: string; value: string }[], key: string, fal
   return settings.find((s) => s.key === key)?.value || fallback
 }
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
 
 export const metadata: Metadata = {
   title: "Gallery",
@@ -65,7 +65,28 @@ export default async function GalleryPage() {
 
   const visibleDbItems = dbItems.filter((item) => item.imageFile?.url || item.fullImageFile?.url)
 
-  const displayItems = [...visibleDbItems, ...fallbackAsItems]
+  function interleave<T, U>(primary: T[], filler: U[]): (T | U)[] {
+    if (primary.length === 0) return filler
+    const total = primary.length + filler.length
+    const positions = new Set(
+      primary.map(
+        (_, i) => Math.round(((i + 1) * total) / (primary.length + 1)) - 1
+      )
+    )
+    const result: (T | U)[] = []
+    const fillerQueue = [...filler]
+    let p = 0
+    for (let i = 0; i < total; i++) {
+      if (positions.has(i)) {
+        result.push(primary[p++])
+      } else {
+        result.push(fillerQueue.length ? fillerQueue.shift()! : primary[p++])
+      }
+    }
+    return result
+  }
+
+  const displayItems = interleave(visibleDbItems, fallbackAsItems)
 
   const categories: string[] = Array.from(
     new Set(displayItems.map((item) => item.category).filter((c): c is string => !!c))

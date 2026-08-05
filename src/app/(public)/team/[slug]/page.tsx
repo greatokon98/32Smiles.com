@@ -9,7 +9,21 @@ import { siteConfig } from "@/config/site"
 import { formatDate, serializeContent } from "@/lib/utils"
 import { TeamProfile } from "./team-profile"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
+
+export async function generateStaticParams() {
+  const members = await prisma.teamMember.findMany({
+    where: {
+      content: {
+        type: ContentType.TEAM_MEMBER,
+        status: ContentStatus.PUBLISHED,
+        deletedAt: null,
+      },
+    },
+    select: { content: { select: { slug: true } } },
+  })
+  return members.map((m) => ({ slug: m.content.slug }))
+}
 
 type TeamMemberItem = Prisma.TeamMemberGetPayload<{
   include: {

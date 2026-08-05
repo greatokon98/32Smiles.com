@@ -14,8 +14,23 @@ import { formatCurrency, serializeContent } from "@/lib/utils"
 import { siteConfig } from "@/config/site"
 import { ProductDetail } from "./product-detail"
 import { RelatedProducts } from "./related-products"
+import { getProductFallbackImages } from "@/lib/product-images"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 300
+
+export async function generateStaticParams() {
+  const products = await prisma.product.findMany({
+    where: {
+      content: {
+        type: ContentType.PRODUCT,
+        status: ContentStatus.PUBLISHED,
+        deletedAt: null,
+      },
+    },
+    select: { content: { select: { slug: true } } },
+  })
+  return products.map((p) => ({ slug: p.content.slug }))
+}
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -48,6 +63,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = await getProduct(slug)
   if (!product) return { title: "Product Not Found" }
 
+  const productImages = await getProductFallbackImages()
+  const imageUrl = product.content.featuredImage?.url || productImages[slug]
+
   const seo = product.content.seoMetadata
   const title =
     seo?.metaTitle ||
@@ -65,8 +83,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: seo?.ogDescription || description,
       images: seo?.ogImage
         ? [{ url: seo.ogImage }]
-        : product.content.featuredImage
-          ? [{ url: product.content.featuredImage.url }]
+        : imageUrl
+          ? [{ url: imageUrl }]
           : [],
       type: "website",
     },
@@ -76,8 +94,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: seo?.twitterDescription || description,
       images: seo?.twitterImage
         ? [seo.twitterImage]
-        : product.content.featuredImage
-          ? [product.content.featuredImage.url]
+        : imageUrl
+          ? [imageUrl]
           : [],
     },
     ...(seo?.canonicalUrl && {
@@ -92,10 +110,25 @@ export default async function ProductPage({ params }: Props) {
 
   if (!product) notFound()
 
-  prisma.content.update({
-    where: { id: product.contentId },
-    data: { viewCount: { increment: 1 } },
-  })
+  const productImages = await getProductFallbackImages()
+
+  const enrichedProduct = {
+    ...product,
+    content: {
+      ...product.content,
+      featuredImage: product.content.featuredImage || {
+        url: productImages[slug],
+      },
+    },
+  }
+
+  // Increment view count (fire and forget, skip during build-time prerender)
+  if (process.env.NEXT_PHASE !== "phase-production-build") {
+    prisma.content.update({
+      where: { id: product.contentId },
+      data: { viewCount: { increment: 1 } },
+    })
+  }
 
   return (
     <>
@@ -118,7 +151,7 @@ export default async function ProductPage({ params }: Props) {
         </div>
       </section>
 
-      <ProductDetail product={serializeContent(product) as any} />
+      <ProductDetail product={serializeContent(enrichedProduct) as any} />
 
       <RelatedProducts
         currentSlug={slug}

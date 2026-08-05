@@ -3,6 +3,7 @@ import { contentService } from "@/services/content.service"
 import { ContentTypeSchema } from "@/domains/content/validation"
 import { serializeContent } from "@/lib/utils"
 import { guardPermission } from "@/lib/require-permission-route"
+import { revalidateContentPaths } from "@/lib/revalidate-paths"
 
 // GET /api/admin/content/[type] - List content by type
 export async function GET(
@@ -60,6 +61,8 @@ export async function POST(
       { ...body, type: typeResult.data },
       session.user.id
     )
+
+    await revalidateContentPaths(content.type, content.slug)
 
     return NextResponse.json(serializeContent(content), { status: 201 })
   } catch (error) {
