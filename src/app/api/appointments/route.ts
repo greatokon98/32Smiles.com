@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
     try {
       const staff = await prisma.user.findMany({
         where: {
-          role: { in: ["RECEPTIONIST", "ADMIN"] },
+          role: { in: ["RECEPTIONIST", "ADMIN", "SUPER_ADMIN"] },
           isActive: true,
           deletedAt: null,
         },
@@ -217,8 +217,9 @@ export async function POST(request: NextRequest) {
     }
 
     let accountCreated = false
+    let tempPassword: string | undefined
     if (!existingUser) {
-      const tempPassword = generateTempPassword()
+      tempPassword = generateTempPassword()
       const passwordHash = await bcrypt.hash(tempPassword, 12)
       await prisma.user.create({
         data: {
@@ -230,19 +231,19 @@ export async function POST(request: NextRequest) {
         },
       })
       accountCreated = true
+    }
 
-      try {
-        await sendAppointmentConfirmation({
-          patientName: appointment.patientName,
-          patientEmail: appointment.patientEmail,
-          date: appointment.date,
-          time: appointment.time,
-          service: appointment.service,
-          tempPassword,
-        })
-      } catch (emailError) {
-        console.error("[API] Failed to send appointment confirmation email:", emailError)
-      }
+    try {
+      await sendAppointmentConfirmation({
+        patientName: appointment.patientName,
+        patientEmail: appointment.patientEmail,
+        date: appointment.date,
+        time: appointment.time,
+        service: appointment.service,
+        ...(accountCreated && tempPassword ? { tempPassword } : {}),
+      })
+    } catch (emailError) {
+      console.error("[API] Failed to send appointment confirmation email:", emailError)
     }
 
     return NextResponse.json(

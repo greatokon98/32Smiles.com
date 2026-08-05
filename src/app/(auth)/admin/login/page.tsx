@@ -13,6 +13,18 @@ function LoginForm({ googleConfigured }: { googleConfigured: boolean }) {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
+  const VIEWER_SAFE_PREFIXES = ["/checkout", "/appointment", "/order/", "/dashboard", "/"]
+
+  function resolvePostLoginPath(raw: string, role: string): string {
+    const isSameOrigin = raw.startsWith("/") && !raw.startsWith("//")
+    if (!isSameOrigin) return role === "VIEWER" ? "/dashboard" : "/admin/dashboard"
+    if (role === "VIEWER") {
+      const safe = VIEWER_SAFE_PREFIXES.some((prefix) => raw === prefix || raw.startsWith(prefix))
+      return safe ? raw : "/dashboard"
+    }
+    return raw
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError("")
@@ -34,11 +46,7 @@ function LoginForm({ googleConfigured }: { googleConfigured: boolean }) {
       } else {
         const session = await getSession()
         const role = session?.user?.role || "VIEWER"
-        if (role === "VIEWER") {
-          router.push("/dashboard")
-        } else {
-          router.push(callbackUrl)
-        }
+        router.push(resolvePostLoginPath(callbackUrl, role))
         router.refresh()
       }
     } catch {
