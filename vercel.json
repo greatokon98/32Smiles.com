@@ -2,15 +2,5 @@
   "framework": "nextjs",
   "buildCommand": "prisma generate && next build",
   "installCommand": "npm install",
-  "regions": ["cpt1"],
-  "crons": [
-    {
-      "path": "/api/cron/health-check",
-      "schedule": "0 */6 * * *"
-    },
-    {
-      "path": "/api/cron/appointment-reminders",
-      "schedule": "0 7 * * *"
-    }
-  ]
+  "regions": ["cpt1"]
 }
