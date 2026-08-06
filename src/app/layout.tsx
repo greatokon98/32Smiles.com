@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { siteConfig } from "@/config/site"
+import { isDemoModeEnabled } from "@/lib/demo-gate"
+import DemoProtection from "@/lib/demo-protection"
 import "./globals.css"
 
 const inter = Inter({
@@ -8,6 +10,8 @@ const inter = Inter({
   subsets: ["latin"],
   display: "swap",
 })
+
+const demoMode = isDemoModeEnabled()
 
 export const metadata: Metadata = {
   title: {
@@ -34,6 +38,9 @@ export const metadata: Metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
   },
+  robots: demoMode
+    ? { index: false, follow: false }
+    : undefined,
 }
 
 export default function RootLayout({
@@ -43,7 +50,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} h-full`}>
-      <body className="min-h-full flex flex-col antialiased" suppressHydrationWarning>{children}</body>
+      <body className="min-h-full flex flex-col antialiased" suppressHydrationWarning>
+        {demoMode && <DemoProtection />}
+        {children}
+      </body>
     </html>
   )
 }

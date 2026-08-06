@@ -1,6 +1,15 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+## Demo password gate
+
+The demo deployment is protected by a password gate. Everything — pages, APIs, images and the image optimizer — requires a valid session cookie except static framework assets and auth/cron API routes.
+
+- `DEMO_MODE=true` enables the gate; anything else disables it (full bypass, no behavior change).
+- `DEMO_PASSWORD` holds the shared password (never hardcoded; timing-safe comparison).
+- `DEMO_SESSION_HOURS` sets the session cookie lifetime (default `8`).
+- Client-side hardening (right-click/copy/print blocks, confidential watermark, noindex, devtools notice) activates only while `DEMO_MODE=true`.
+
+> **Legal note:** watermarking + `noindex` + session tokens create an evidence trail for leaked screenshots. Pair this with a signed NDA/terms before granting the client the password; no web layer can fully prevent screenshots or a determined engineer reading the minified client bundle.
 
 First, run the development server:
 

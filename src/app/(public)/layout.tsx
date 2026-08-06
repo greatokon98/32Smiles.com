@@ -14,8 +14,10 @@ import { HeaderUserMenu } from "./header-user-menu"
 import NotificationBell from "@/features/notifications/NotificationBell"
 import { FooterNewsletter } from "./footer-newsletter"
 import { getPublicSettings } from "@/lib/settings"
+import { isDemoModeEnabled } from "@/lib/demo-gate"
 
 export default async function PublicLayout({ children }: { children: ReactNode }) {
+  const demoMode = isDemoModeEnabled()
   const publicSettings = await getPublicSettings()
   const logoUrl = publicSettings.site_logo_url || "/images/logo.png"
   const footerLogoUrl = publicSettings.site_footer_logo_url || "/images/32smiles.png"
@@ -180,7 +182,10 @@ export default async function PublicLayout({ children }: { children: ReactNode }
           {/* Bottom Bar */}
           <div className="border-t border-gray-800 mt-10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm">
             <p>&copy; {new Date().getFullYear()} {siteConfig.name}. All rights reserved.</p>
-            <div className="flex gap-6">
+            <div className="flex gap-6 items-center">
+              {demoMode && (
+                <span className="text-primary-400">Confidential — for evaluation only</span>
+              )}
               <Link href="/contact" className="hover:text-white transition-colors">Contact</Link>
             </div>
           </div>
